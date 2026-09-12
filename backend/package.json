@@ -1,0 +1,12 @@
+{
+  "name": "interview-dsh-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "eslint src/ --ext .ts"
+  }
+}

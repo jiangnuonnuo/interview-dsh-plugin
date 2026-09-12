@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+out/
+
+# DSH runtime files
+.dsh/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Playwright
+playwright-report/
+test-results/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Compiled outputs that should not be committed
+**/*.js.map
+**/*.d.ts
+
+# Claude/OpenSpec local config (can be regenerated)
+.claude/
