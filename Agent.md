@@ -1,27 +1,26 @@
-# Agent.md — interview-dsh 插件开发约束
+# Agent.md
 
-> 只记录**不变的原则和红线**。会变的规则、流程、目录细节见 `docs/architecture/ARCHITECTURE.md`。
+每次开发必须遵守的原则和红线。目录、分层、DSH 接法见 `docs/architecture/ARCHITECTURE.md`。产品范围见 `docs/product/REQUIREMENTS.md`。
 
-## 项目是什么
+## 原则
 
-- DSH 面试插件，空项目从零搭建。
-- 后端 TypeScript，前端 React。
-
-## 核心原则（不可违背）
-
+- **对话表面归宿主**：插件不实现聊天页。
 - **前后端物理隔离**：`backend/` 与 `frontend/` 严格分离。
-- **单一共享契约**：前后端只能通过 `shared/` 的 TS 类型通信，禁止隐式契约。
-- **DSH 运行时隔离**：DSH SDK/Hooks/Web API 集中在适配层，不散落进业务代码。
-- **安全默认**：敏感数据默认加密、默认脱敏、默认不暴露给前端。
+- **单一共享契约**：只通过 `shared/` 的 TypeScript 类型通信。
+- **DSH 运行时隔离**：SDK 只出现在适配层。
+- **安全默认**：敏感数据默认加密、脱敏、不暴露给前端。
+- **开发遵循架构**：实现不得偏离 `docs/architecture/ARCHITECTURE.md`。
 
-## 红线（绝对禁止）
+## 红线
 
+- 禁止自建聊天 UI。
 - 禁止硬编码 API Key / Token / 密码。
-- 禁止前端直接处理后端敏感逻辑（加密、解密、权限判断）。
-- 禁止修改 DSH 核心文件或运行时行为（官方 Hook 除外）。
+- 禁止前端处理加密、解密、权限判断、评分判定。
+- 禁止修改 DSH 核心或运行时（官方 Hook 除外）。
 - 禁止引入未经验证的开源依赖。
+- 禁止用猜测的 DSH API 绕过架构。
 
-## 遇到不确定时
+## 不确定时
 
-- 不确定的 DSH API，先查文档，否则标注 `TODO`。
-- 需要偏离上述原则时，先更新 `docs/architecture/ARCHITECTURE.md` 并记录原因。
+- 查架构文档；再查产品需求。
+- 偏离原则前，先改架构文档并记录原因。
