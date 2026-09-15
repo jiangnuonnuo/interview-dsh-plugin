@@ -5,15 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc --noEmit && vite build --config vite.client.config.ts",
     "preview": "vite preview",
     "test": "jest",
-    "lint": "eslint src/ --ext .ts,.tsx"
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "interview-dsh-shared": "*",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "interview-dsh-shared": "*"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.2.0",

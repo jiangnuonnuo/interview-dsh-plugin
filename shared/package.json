@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsc",
     "test": "echo 'shared tests delegated to backend/frontend workspaces'",
-    "lint": "eslint src/ --ext .ts"
+    "lint": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

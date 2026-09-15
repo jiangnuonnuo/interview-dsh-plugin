@@ -1,1 +1,1 @@
-export { PluginError } from 'shared/errors/common.js';
+export { PluginError } from 'interview-dsh-shared';

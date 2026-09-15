@@ -1,0 +1,5 @@
+# interview-dsh bundle patch: one Host row. The dsh.client declaration on the
+# root package.json loads the browser half from exports["./client"].
+- insert:
+    - id: interview-dsh
+      name: interview-dsh

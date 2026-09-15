@@ -2,6 +2,33 @@
   "name": "interview-dsh",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
+  "main": "./backend/dist/index.js",
+  "exports": {
+    ".": "./backend/dist/index.js",
+    "./client": "./frontend/dist/client.js",
+    "./typert": "./backend/dist/typert.host.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "files": [
+    "backend/dist",
+    "frontend/dist/client.js",
+    "cordis.patch.yml"
+  ],
   "workspaces": [
     "backend",
     "frontend",
@@ -11,5 +38,8 @@
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
     "lint": "npm run lint --workspaces"
+  },
+  "dependencies": {
+    "interview-dsh-shared": "*"
   }
 }

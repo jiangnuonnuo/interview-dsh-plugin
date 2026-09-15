@@ -1,0 +1,24 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--dsh-color-border, rgba(127, 127, 127, 0.35));
+  border-radius: 8px;
+  background: var(--dsh-color-surface, transparent);
+  color: var(--dsh-color-text, inherit);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.button:hover {
+  border-color: var(--dsh-color-primary, #4f7cff);
+  color: var(--dsh-color-primary, #4f7cff);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--dsh-color-primary, #4f7cff);
+  outline-offset: 2px;
+}

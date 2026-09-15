@@ -1,0 +1,43 @@
+schema: spec-driven
+
+context: |
+  Language: zh
+  All artifacts must be written in zh.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+  interview-dsh is a DeepSeek Harness (DSH) plugin, not a standalone app.
+  Product source of truth: docs/product/REQUIREMENTS.md (MVP locked).
+  Architecture source of truth: docs/architecture/ARCHITECTURE.md.
+  Interviewer behavior source: interviewer-role-prompt.md, bagua mode only for MVP.
+  UI reference: doc/entry-panel.png for the entry panel; doc/entrance.png and doc/layout.png only for host placement. Mock extras (duration, countdown, 1/8, other score dims) are visual only.
+
+  Layout: backend/ (entrypoints, services, data, infra), frontend/ (React panel only), shared/ (types, no business logic).
+  DSH Host SDK only in backend/src/infra/dsh/. DSH Web Client SDK (sidebarRightTabs, slots, conversation.input.right) only in frontend/src/infra/dsh/. Features must not import those SDKs. No custom chat UI, message list, input box, or bubbles in frontend.
+  Root package.json may declare dsh.bundle and dsh.client so the plugin installs into DSH desktop; do not add a new top-level business folder.
+  Frontend talks via shared types and official ctx.remote (or equivalent). No fetch('/api/...').
+  Dual session (interviewer A + coach B), same conversation AI config, no pre-start history, unload on end — later changes, not the first slice.
+  No hardcoded secrets. Frontend must not encrypt, decrypt, authorize, or score. Do not modify DSH core. No unverified dependencies. Do not swallow errors.
+  Phase-1 out of scope unless a change explicitly adds it: duration, folder picker, off-topic handling, project-deep-dive, mixed mode, dead question bank, audio/video, cloud archive.
+
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

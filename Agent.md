@@ -7,7 +7,7 @@
 - **对话表面归宿主**：插件不实现聊天页。
 - **前后端物理隔离**：`backend/` 与 `frontend/` 严格分离。
 - **单一共享契约**：只通过 `shared/` 的 TypeScript 类型通信。
-- **DSH 运行时隔离**：SDK 只出现在适配层。
+- **DSH 运行时隔离**：SDK 只出现在适配层。Host API 在 `backend/src/infra/dsh/`，Web Client API 在 `frontend/src/infra/dsh/`。
 - **安全默认**：敏感数据默认加密、脱敏、不暴露给前端。
 - **开发遵循架构**：实现不得偏离 `docs/architecture/ARCHITECTURE.md`。
 
@@ -18,7 +18,7 @@
 - 禁止前端处理加密、解密、权限判断、评分判定。
 - 禁止修改 DSH 核心或运行时（官方 Hook 除外）。
 - 禁止引入未经验证的开源依赖。
-- 禁止用猜测的 DSH API 绕过架构。
+- 禁止用猜测的 DSH API 绕过架构。当前桌面端没有 `sidebarRightTabs` 时，只允许使用该版本 Client 目录里已存在的 Slot。触发按钮跟本机「AI 优化」一样挂 `conversation.input.right`；面板挂 `shell.overlay`。禁止为此引入第三方 sidebar 包。
 
 ## 不确定时
 

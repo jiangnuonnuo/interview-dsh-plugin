@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>interview-dsh 入口面板参照</title>
+  <style>
+    :root {
+      --ink: #1c2434;
+      --muted: #6b7385;
+      --line: #e6ebf4;
+      --paper: #ffffff;
+      --wash: #f4f6fb;
+      --chip: #eef3ff;
+      --chip-ink: #3d6ae8;
+      --select-bg: #f5f9ff;
+      --select-line: #9ec0ff;
+      --cta-a: #4d74ff;
+      --cta-b: #7a5bff;
+      --step: #4d74ff;
+      --ok: #2f6bff;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #dfe6f2;
+      color: var(--ink);
+      font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Source Han Sans SC", system-ui, sans-serif;
+    }
+
+    .stage {
+      min-height: 100vh;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .panel {
+      width: 380px;
+      background: var(--paper);
+      border: 1px solid #d7deea;
+      border-radius: 16px;
+      box-shadow: 0 18px 48px rgba(28, 36, 52, 0.08);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: 18px 18px 12px;
+    }
+
+    .brand {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .mark {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      background: linear-gradient(180deg, #5b86ff 0%, #6d63f5 100%);
+      display: grid;
+      place-items: center;
+      flex: 0 0 32px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 650;
+      letter-spacing: 0.01em;
+    }
+
+    .sub {
+      margin: 3px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .close {
+      width: 28px;
+      height: 28px;
+      border: 0;
+      background: transparent;
+      color: #8b93a3;
+      border-radius: 8px;
+    }
+
+    .body {
+      padding: 4px 18px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .block-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .n {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--step);
+      color: #fff;
+      font-size: 11px;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+    }
+
+    .search {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 36px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fbfcfe;
+      color: #98a0b0;
+      font-size: 12px;
+    }
+
+    .search b {
+      color: #b3bac6;
+      font-weight: 400;
+    }
+
+    .cats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .cat {
+      height: 28px;
+      padding: 0 10px;
+      border-radius: 8px;
+      background: var(--chip);
+      color: var(--chip-ink);
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .cat.is-on {
+      background: #dce7ff;
+      color: #2b5de8;
+      font-weight: 600;
+    }
+
+    .topics {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .topic {
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #fff;
+      font-size: 13px;
+    }
+
+    .topic.is-on {
+      background: var(--select-bg);
+      border-color: var(--select-line);
+      box-shadow: inset 0 0 0 1px rgba(77, 116, 255, 0.08);
+    }
+
+    .ico {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 22px;
+    }
+
+    .settings {
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .diffs {
+      display: flex;
+      gap: 8px;
+    }
+
+    .diff {
+      flex: 1;
+      height: 34px;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: #4b5568;
+      font-size: 13px;
+      display: grid;
+      place-items: center;
+    }
+
+    .diff.is-on {
+      background: #24324a;
+      border-color: #24324a;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .cta {
+      height: 44px;
+      border: 0;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+      background: linear-gradient(90deg, var(--cta-a), var(--cta-b));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .hint {
+      margin: 0;
+      text-align: center;
+      font-size: 11px;
+      color: #8a93a6;
+      line-height: 1.55;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <aside class="panel" aria-label="模拟面试入口">
+      <header class="head">
+        <div class="brand">
+          <div class="mark" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 3.5h10v9H3z" stroke="#fff" stroke-width="1.4"/>
+              <path d="M5 6h6M5 8.5h4" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="title">模拟面试</h1>
+            <p class="sub">八股专项陪练 · 当前对话当考场</p>
+          </div>
+        </div>
+        <button class="close" aria-label="关闭" type="button">
+          <svg width="12" height="12" viewBox="0 0 12 12">
+            <path d="M2 2l8 8M10 2L2 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </header>
+
+      <div class="body">
+        <section>
+          <div class="block-title"><span class="n">1</span>选择面试主题</div>
+          <div class="search" style="margin-top:10px">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <circle cx="6" cy="6" r="4.2" stroke="#98a0b0" stroke-width="1.4"/>
+              <path d="M9.2 9.2L12 12" stroke="#98a0b0" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            搜索面试主题，如：MySQL、Redis…
+          </div>
+          <div class="cats" style="margin-top:10px">
+            <span class="cat is-on">后端开发</span>
+            <span class="cat">数据 / 中间件</span>
+            <span class="cat">系统设计</span>
+            <span class="cat">算法与编程</span>
+            <span class="cat">运维与云原生</span>
+            <span class="cat">产品 / 其他</span>
+          </div>
+          <div class="topics" style="margin-top:10px">
+            <div class="topic is-on">
+              <span class="ico" style="background:#e8f1ff">
+                <svg width="12" height="12" viewBox="0 0 12 12"><ellipse cx="6" cy="3.2" rx="4.2" ry="1.6" fill="#3d6ae8"/><path d="M1.8 3.2v5.2c0 .9 1.9 1.6 4.2 1.6s4.2-.7 4.2-1.6V3.2" stroke="#3d6ae8" fill="none"/></svg>
+              </span>
+              MySQL 索引与优化
+            </div>
+            <div class="topic">
+              <span class="ico" style="background:#ffe8ea">
+                <svg width="12" height="12" viewBox="0 0 12 12"><rect x="2" y="2" width="8" height="8" rx="1.5" fill="#e11d48"/></svg>
+              </span>
+              Redis 并发与缓存
+            </div>
+            <div class="topic">
+              <span class="ico" style="background:#fff1e4">
+                <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6h8M6 2v8" stroke="#ea580c" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </span>
+              消息队列（Kafka / RocketMQ）
+            </div>
+            <div class="topic">
+              <span class="ico" style="background:#f1e9ff">
+                <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="3" cy="6" r="1.4" fill="#7c3aed"/><circle cx="9" cy="3.5" r="1.4" fill="#7c3aed"/><circle cx="9" cy="8.5" r="1.4" fill="#7c3aed"/><path d="M4.3 5.5l3.2-1.5M4.3 6.5l3.2 1.5" stroke="#7c3aed" stroke-width="1.1"/></svg>
+              </span>
+              分布式系统设计
+            </div>
+            <div class="topic">
+              <span class="ico" style="background:#e8f8ee">
+                <svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 10C6 10 3 8 3 5.2 3 3.8 4.2 3 5.2 3c.7 0 1.3.4 1.6.9C7.1 3.4 7.7 3 8.4 3 9.5 3 10.6 3.9 10.6 5.4 10.6 8 6 10 6 10z" fill="#16a34a"/></svg>
+              </span>
+              Spring / Spring Boot
+            </div>
+            <div class="topic">
+              <span class="ico" style="background:#fff0e6">
+                <svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 9.5L6 2.5 9 9.5" stroke="#c2410c" stroke-width="1.5" fill="none" stroke-linejoin="round"/></svg>
+              </span>
+              Java 并发编程
+            </div>
+            <div class="topic">
+              <span class="ico" style="background:#e7f6f4">
+                <svg width="12" height="12" viewBox="0 0 12 12"><rect x="2" y="3" width="8" height="6" rx="1.2" fill="#0f766e"/></svg>
+              </span>
+              数据库实战场景
+            </div>
+            <div class="topic">
+              <span class="ico" style="background:#eef1f6">
+                <svg width="12" height="12" viewBox="0 0 12 12"><path d="M7.6 2.4l2 2L5 9H3V7z" stroke="#64748b" stroke-width="1.3" fill="none"/></svg>
+              </span>
+              自定义主题
+            </div>
+          </div>
+        </section>
+
+        <section class="settings">
+          <div class="block-title"><span class="n">2</span>面试设置</div>
+          <div class="diffs" role="radiogroup" aria-label="难度">
+            <span class="diff">初级</span>
+            <span class="diff is-on">中级</span>
+            <span class="diff">高级</span>
+          </div>
+          <div class="cta">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M4 3.2v7.6L11 7 4 3.2z" fill="#fff"/>
+            </svg>
+            开始模拟面试
+          </div>
+          <p class="hint">占用当前这条对话，不另开聊天页。<br />开始后先记下主题与难度，本场不选时长、不选文件夹。</p>
+        </section>
+      </div>
+    </aside>
+  </div>
+</body>
+</html>

@@ -1,20 +1,24 @@
-/**
- * DSH runtime adapter stub.
- *
- * TODO: Replace with actual DSH SDK/Hooks integration once the runtime API is confirmed.
- */
+import { createInterviewEntryPort } from '../../entrypoints/interview-entry.js';
 
-export interface DshRuntime {
-  readonly registerHook: (name: string, handler: () => void | Promise<void>) => void;
-  readonly getConfig: () => Promise<Record<string, unknown>>;
+export const name = 'interview-dsh';
+
+export interface HostContext {
+  provide(key: string, value: unknown): void;
 }
 
-export const createDshRuntime = async (): Promise<DshRuntime> => {
-  // Placeholder implementation
-  return {
-    registerHook: (_name: string, _handler: () => void | Promise<void>) => {
-      // no-op
-    },
-    getConfig: async () => ({}),
-  };
+const bindInterviewEntry = (service: ReturnType<typeof createInterviewEntryPort>) => {
+  Object.defineProperty(service, 'typertRemote', {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: { service, serviceKey: 'interviewEntry', namespace: 'interviewEntry' },
+  });
+  return service;
 };
+
+/**
+ * Host lifecycle only. UI tabs and header actions belong in the frontend adapter.
+ */
+export function apply(ctx: HostContext): void {
+  ctx.provide('interviewEntry', bindInterviewEntry(createInterviewEntryPort()));
+}
