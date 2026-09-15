@@ -6,10 +6,11 @@ DSH 八股专项模拟面试插件。面试发生在 **DSH 现有对话**里；�
 
 | 文件 | 内容 |
 |---|---|
-| `CLAUDE.md` / `Agent.md` | 每次开发必须遵守的规则 |
-| `docs/architecture/ARCHITECTURE.md` | 架构（开发遵循） |
-| `docs/product/REQUIREMENTS.md` | 产品需求 |
-| `interviewer-role-prompt.md` | 面试官行为契约 |
+| `Agent.md` | 易忘事实、已拍板决策、开发过程 |
+| `docs/architecture/ARCHITECTURE.md` | 架构设计与编码规范 |
+| `docs/product/REQUIREMENTS.md` | 产品定位与使用者 |
+| `openspec/changes/` | 当前能力的实现 change |
+| `interviewer-role-prompt.md` | 面试官内容口径 |
 | `doc/entrance.png` / `doc/layout.png` | UI 参考 |
 
 ## 目录结构

@@ -1,6 +1,6 @@
 ## Context
 
-入口 change 已归档：`acceptEntryConfig` 只把主题/难度写入内存 store，面板成功后停在「待开考」。Host 适配层目前只 `provide('interviewEntry')`，没有 Agent 注入或第二条会话。见 `proposal.md` 的 Why。约束见 `ARCHITECTURE.md` §3–§5、§7：Host SDK 只在 `backend/src/infra/dsh/`，Client SDK 只在 `frontend/src/infra/dsh/`，禁止自建聊天，查不到注入 API 时标 `TODO` 而不是绕过。
+入口 change 已归档：`acceptEntryConfig` 只把主题/难度写入内存 store，面板成功后停在「待开考」。Host 适配层目前只 `provide('interviewEntry')`，没有 Agent 注入或第二条会话。见 `proposal.md` 的 Why。约束见 `docs/architecture/ARCHITECTURE.md` 的分层、DSH 适配层、会话隔离与安全边界：Host SDK 只在 `backend/src/infra/dsh/`，Client SDK 只在 `frontend/src/infra/dsh/`，禁止自建聊天，查不到注入 API 时标 `TODO` 而不是绕过。
 
 当前 Desktop 目标仍是 0.2.17 / harness 0.1.1-rc.2。Agent 注入、会话隔离、触发助手开口的具体 Host 符号在实现前必须对照本机已装 SDK 与官方文档核实，不得臆造。
 

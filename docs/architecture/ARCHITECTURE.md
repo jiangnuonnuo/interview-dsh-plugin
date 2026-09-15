@@ -1,6 +1,12 @@
 # 架构
 
-开发以本文为准。产品要做什么见 `docs/product/REQUIREMENTS.md`，不要用本文覆盖需求。
+本文是工程落地的依据：系统怎么拆、依赖朝哪边、DSH 怎么接、代码怎么写。
+
+- 产品定位与使用者见 `docs/product/REQUIREMENTS.md`，不要用本文改写成产品说明书。
+- 当前能力、交互和验收以 OpenSpec change 为准，不要用本文锁死产品主链路。
+- 易忘事实与过程准则见 `Agent.md`。
+
+实现与本文冲突时，先改本文并说明原因，再改代码。
 
 ## 1. 系统位置
 
@@ -16,81 +22,154 @@ DSH Web
 ```
 
 - 对话 UI、输入框、模型配置由 DSH 提供。
-- 插件前端只做面板，禁止实现聊天页。
+- 插件前端只做面板；`frontend/src/features/` 不得出现消息列表、输入框、气泡。
 - 插件后端通过官方生命周期接入。
 - DSH Host SDK 只出现在 `backend/src/infra/dsh/`；DSH Web Client SDK 只出现在 `frontend/src/infra/dsh/`。
 
-## 2. 目录
+## 2. 目录与模块职责
 
 ```
-backend/     TypeScript，会话、提示词、落盘、DSH Host 适配
+backend/     TypeScript：用例入口、领域服务、落盘、DSH Host 适配
 frontend/    React 面板；DSH Web Client 适配在 src/infra/dsh/
-shared/      前后端共享类型，无业务逻辑
+shared/      前后端共享类型与错误码，无业务逻辑
 cordis.patch.yml / 根 package.json 的 dsh.bundle  组合包清单（不是业务目录）
 docs/product/REQUIREMENTS.md
 docs/architecture/ARCHITECTURE.md   本文
-openspec/    从需求拆出的实现 change
+openspec/    实现 change
 ```
 
-新文件必须落到对应目录，不要另起顶层业务文件夹。
-
-## 3. 分层
-
-后端：`entrypoints/` → `services/` → `data/` → `infra/`。
-
-- 只有 `backend/src/infra/dsh/` 可调用 DSH **Host** API（Agent 注入、轮次、Typert、工作区文件、插件生命周期）。
-- 领域逻辑不引用 DSH Web / 前端 API。
-- 对外契约在 `shared/` 定义完整类型；禁止口头约定或重复内联类型。
-
-前端：
-
-- React + TypeScript + Hooks，禁止无说明的 `any`。
-- 只通过 `shared/` + 官方 `ctx.remote`（或等价桥接）调后端，禁止 `fetch('/api/...')`。
-- 功能放在 `frontend/src/features/`；此处不得出现消息列表、输入框、气泡。
-- DSH **Web Client** API 只出现在 `frontend/src/infra/dsh/`。`features/` 不得直接 import 这些 SDK。
-- 右侧入口的装配顺序：先用官方 `ctx.sidebarRightTabs` / `ctx.sidebarRight.openTab`（harness 0.1.5-rc.1+）。当前 Desktop 0.2.17 所带的 0.1.1-rc.2 **没有**该 API；此时适配层走与本机已装插件相同的官方 Slot 装配（对照 `dsh-ai-prompt-optimizer`：`inject: ['slots','remote']` + `ctx.slots.inject`）。**触发按钮**挂 `conversation.input.right`（与「AI 优化」同一列表、同一新会话首页输入条）；不要用 `conversation.session.header.utilities` 当主入口——新会话首页没有 session header，该槽不渲染。根包 `dsh.client.inject` 与优化器对齐（runtime / remotes / layout / conversation）：按钮靠 conversation，overlay 靠 layout。面板正文：有官方右栏且 `sidebarRightTabs.register` 已成功则 `openTab`，否则 `shell.overlay` 右侧抽屉（`position: fixed`，对照优化器错误弹窗）。探测官方 API 只用 `ctx.get`，不得在 `get` 已存在时再读未声明的 `ctx.sidebarRight`（沙箱会 throw，点按钮无面板）。打开失败必须在 overlay 给出可见错误。禁止为此引入 `dsh-better-sidebar` 或其它未随桌面端提供的包。
-- 样式：CSS Modules 或 Tailwind。入口视觉以 `doc/entry-panel.png` 为准；`doc/entrance.png` / `doc/layout.png` 只说明宿主位置与后续评估布局，其中的时长、倒计时、非五维评分不要做。
-- 仓库根的 `package.json` / `cordis.patch.yml` 可作为 DSH 组合包清单，不另起顶层业务目录。
-
-## 4. 双会话（实现约束）
-
-开始面试后必须是两条会话，配置都来自**当前这条 DSH 对话**，插件不得另配模型或 Key。
-
-| 会话 | 职责 | 禁止 |
+| 模块 | 职责 | 禁止 |
 |---|---|---|
-| A 对话 / 面试官 | 提问、追问、提示、换题、结束语 | 读场前历史；看见评分/标准答提示词 |
-| B 面板 / 教练 | 要点、标准答、评分、简报 | 任何输出进入气泡；读场前历史 |
+| `backend/` | 会话、提示词组装、校验、落盘、Host 适配 | 引用 Web Client SDK；在 Host 注册 Slot / 输入栏按钮 |
+| `frontend/` | 入口与评估面板、Client 适配 | 自建聊天；`features/` 直接 import Client SDK |
+| `shared/` | 跨端类型、API 契约、稳定错误码 | 业务逻辑、DSH SDK、React |
+| 根清单 | 声明 Host/Client 组合包 | 另起顶层业务文件夹 |
+
+新文件必须落到对应目录。仓库根的 `package.json` / `cordis.patch.yml` 只作 DSH 组合包清单。
+
+## 3. 分层与依赖
+
+依赖方向：
+
+```
+frontend/features  →  shared  ←  backend/entrypoints → backend/services → backend/data
+        ↓                         ↓
+frontend/infra/dsh            backend/infra/dsh
+   (Web Client SDK)              (Host SDK)
+```
+
+领域逻辑不引用 DSH。跨端只通过 `shared/` 的 TypeScript 类型沟通，禁止口头约定或重复内联一份契约。
+
+### 3.1 后端
+
+路径：`entrypoints/` → `services/` → `data/` → `infra/`。
+
+- `entrypoints/`：对 Host 暴露的端口（如 `interviewEntry`），做参数校验与错误映射，不堆领域规则。
+- `services/`：用例与领域规则（配置校验、提示词模板化、会话编排）。不 import Host SDK。
+- `data/`：内存或工作区持久化。不引用 DSH。
+- `infra/dsh/`：唯一可调用 Host API 的地方（Agent 注入、轮次、Typert、工作区文件、插件生命周期）。
+- 根包 `main` 指向 `backend/dist/index.js`，该模块必须导出 `apply` 与 `name`。`backend/tsconfig.json` 的 `rootDir` 必须是 `./src`，否则 dist 布局对不上、插件树起不来。
+- 不要把本机 Desktop 安装目录写进仓库。
+
+### 3.2 前端
+
+- React + TypeScript + Hooks。禁止无说明的 `any`。
+- 只通过 `shared/` + 官方 `ctx.remote`（或等价桥接）调后端，禁止 `fetch('/api/...')`。
+- 功能放在 `frontend/src/features/`，通过 port 接口拿数据；DSH Web Client API 只出现在 `frontend/src/infra/dsh/`。
+- 样式：当前入口使用 CSS Modules。Client 构建必须把样式内联进 `frontend/dist/client.js`（DSH 只加载该文件，不加载旁路 `style.css`）。新增 UI 库或改用 Tailwind 须在对应 OpenSpec change 里说明。
+- 视觉参照：`doc/entry-panel.png` 管入口结构；`doc/entrance.png` / `doc/layout.png` 只说明宿主位置与后续评估布局，其中的时长、倒计时、非约定评分维度不要从设计图倒推进架构。
+
+### 3.3 shared
+
+- 导出稳定类型、请求/响应、错误码。
+- 前后端各自校验，但以 `shared` 的错误码为契约；前端即时提示不能代替 Host 再拒绝一次。
+
+## 4. DSH 适配层
+
+选型结论（桌面端版本、better-sidebar、验收替身）见 `Agent.md`。下面是装配设计，改接法先改本节。
+
+### 4.1 Host 适配层
+
+- 只出现在 `backend/src/infra/dsh/`。
+- 当前 `apply` 只 `provide('interviewEntry')`。禁止在 Host 注册 Slot、右栏 tab 或输入栏按钮。
+- 查不到注入、卸载或会话隔离 API 时，适配层标 `TODO`，返回结构化错误码，禁止用自建聊天绕过。
+
+### 4.2 Client 适配层
+
+对照本机已装 **`dsh-ai-prompt-optimizer`**。入口只展开面板，不跳转、不新建聊天、不更换当前对话。
+
+**根包 `dsh.client.inject`（要加载的官方包）**必须与优化器对齐：
+
+- `@deepseek-ai/dsh-client-runtime`
+- `@deepseek-ai/dsh-api-remotes`
+- `@deepseek-ai/dsh-client-ui-layout`（`shell.overlay` 宿主）
+- `@deepseek-ai/dsh-client-ui-conversation`（输入栏按钮）
+
+**Client `apply` 的 `inject`（沙箱允许的 ctx 服务）**：`['slots', 'remote']`。不要把 `sidebarRight` / `sidebarRightTabs` 写进这一层——当前 harness 没有这些服务，顶层声明会导致 `apply` 失败。
+
+**沙箱**：只使用 `inject` 声明过的服务。探测额外服务只用 `ctx.get('…')`。禁止在 `get` 已返回 `undefined` 后再读 `ctx.sidebarRight`。
+
+**已注册 Slot：**
+
+| Slot | id / 其它 | 作用 |
+|---|---|---|
+| `conversation.input.right` | id `interview-dsh`，order `9`，文案「面试」 | 主触发。不得用 `conversation.session.header.utilities` |
+| `shell.overlay` | id `interview-dsh/entry-overlay`，order `40` | 回退面板 + 打开失败的可见错误层 |
+
+**打开分支（点击「面试」）：**
+
+1. 用嵌套 `ctx.inject(['sidebarRightTabs'], …)` 尝试 `sidebarRightTabs.register({ id: 'interview-dsh/entry', kind: 'interview' })`，正文挂 `sidebar.right.pane.tab`。成功才把 `officialTabRegistered = true`。该路径缺失时不得让整个 Client `apply` 失败。
+2. 点击时：仅当上一步已成功，且 `ctx.get('sidebarRight')` 上确有 `openTab`，才调用 `openTab('interview')`。
+3. 否则 `shell.overlay` 右侧抽屉：内容 `position: fixed`、`z-index` ≥ 1000。
+4. 「关闭」在面板左上角（标题在其右侧）。再次点「面试」或点「关闭」收起。
+5. 打开失败：同一 overlay 展示可见错误，禁止空 catch、禁止点击无反应。
+
+禁止引入 `dsh-better-sidebar` 或其它未随桌面端提供的包。
+
+## 5. 会话隔离
+
+开始面试后是两条会话，配置都来自**当前这条 DSH 对话**。插件不得另配模型或 Key。具体何时注入、第一问如何出现、面板展示哪些字段，由当前 OpenSpec change 定义。
+
+| 会话 | 职责 | 架构禁止 |
+|---|---|---|
+| A 对话 / 面试官 | 提问、追问、提示、换题、结束语 | 读场前历史；看见评分/标准答提示词；领域层直接调 Host SDK |
+| B 面板 / 教练 | 要点、标准答、评分、简报 | 任何输出进入气泡；读场前历史；前端做评分判定 |
 
 允许：A 的问答作为材料单向交给 B。禁止：B 回流到 A。
 
-结束（停止或问完）必须卸下面试官，当前对话恢复普通助手。适配层查不到注入/卸载 API 时标 `TODO`，禁止用自建聊天绕过。
+结束时必须能卸下面试官，当前对话恢复普通助手。适配层查不到注入/卸载 API 时标 `TODO`，禁止用自建聊天绕过。
 
-## 5. 提示词与出题
+提示词在 `backend/src/services/` 模板化；`infra/dsh/` 只负责交给哪条会话。面试官口径来自 `interviewer-role-prompt.md`，不在适配层手写一套角色。
 
-- 面试官行为从 `interviewer-role-prompt.md` 八股专项模板化后注入会话 A。
-- 题目由 LLM 按主题与本场面试对话生成，禁止内置死题库作为主路径。
-- 「提示一下」「跳过问题」只驱动会话 A；面板不生成这些文案。
+工作区写入走 `backend` 的 `data/` / `infra/`，失败必须映射到面板可见错误；前端不直接写文件，也不在浏览器里做加密。
 
-## 6. 落盘
+## 6. 编码规范
 
-默认根目录：当前打开工作区下的 `study/`。一场一子目录，至少包含 `conversation.md`、`report.md`、`answers/`。开始不选文件夹。写入失败必须对面板可见。
+- TypeScript ESM（`type: module`）。后端 `lint` 以 `tsc --noEmit` 为准。
+- 注释只写意图、约束、复杂流程；位于对应代码之前；禁止尾注释；禁止「已修改 / 新增 / 已修复」之类过程句。
+- 新增或修改跨端字段时，先改 `shared/`，再改两端实现，避免一端内联一份结构。
+- 错误使用 `shared` 中的稳定错误码。禁止用空 catch、`null` 或静默成功表示失败。
+- 禁止在业务代码中硬编码 API Key / Token / 密码。日志与错误文案不得带密钥或完整授权头。
+- 提交信息使用 Conventional Commits。
+- 文件编码 UTF-8。
 
-## 7. 安全与稳定
+## 7. 安全边界
 
-- 禁止硬编码密钥；前端不做加密、解密、权限判断、评分判定。
 - 敏感数据默认加密、脱敏、不暴露给前端。
-- 显式错误处理，禁止吞错。
+- 前端不做加密、解密、权限判断、评分判定。
 - 面试活跃路径禁止不可取消的异步工作；评估请求必须可随会话结束取消。
-- 禁止修改 DSH 核心（官方 Hook 除外）。禁止未验证依赖。
+- 禁止修改 DSH 核心（官方 Hook 除外）。禁止引入未随桌面端提供、也未经当前 change 确认的依赖。
 
-## 8. 测试与变更
+## 8. 测试约定
 
-- 后端：会话、提示词组装、落盘、错误映射要有单元测试。
-- 前端：测入口/评估面板，不要为不存在的聊天页写测试。
-- 功能变更：先保证 `docs/product/REQUIREMENTS.md` 仍正确，再走 OpenSpec change，实现必须符合本文。
-- 提交：Conventional Commits。
-- 偏离本文：先改本文并写明原因，再改代码。
+- 后端：会话编排、提示词组装、校验、落盘、错误映射要有单元测试。
+- 前端：测入口/评估面板和适配层边界，不要为不存在的聊天页写测试。
+- 适配层边界测试锁住「Host 不注册 Slot、Client 不把 Host SDK 引进 features」。
+- 桌面端实机验收是 OpenSpec change 的交付门闩；`npm test`、Vite、`doc/entry-panel-mock.html` 只是仓库内前置。
 
-## 9. 过期材料
+## 9. 变更规则
 
-`openspec/changes/2026-09-12-interview-dsh-bagua-mode/` 按自建聊天编写，实现时不要遵循。
+1. 改分层、目录、适配层或编码规范：先改本文。
+2. 改用户可见行为：走 OpenSpec change（proposal / design / spec / tasks），实现必须仍符合本文。
+3. 产品文档只用于校正方向（这是不是陪练插件、用户是谁），不要求实现去迎合其中的过时细节。
+4. 偏离本文：先改本文并写明原因，再改代码。
