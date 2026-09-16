@@ -1,0 +1,66 @@
+import { INTERVIEW_SESSION_ERROR_MESSAGES, emptyBaguaScores } from 'interview-dsh-shared';
+import { createInterviewPort } from './remote-port';
+import type { ExamRoomSessions } from './start-exam-room';
+
+const mysqlRequest = {
+  topicId: 'mysql',
+  customTopic: '',
+  difficulty: 'mid' as const,
+};
+
+const snapshot = {
+  phase: 'in_progress' as const,
+  sessionId: 'session-exam',
+  topic: 'MySQL 索引与优化',
+  difficulty: 'mid' as const,
+  questionBrief: '聚簇 vs 二级索引',
+  keyPoints: ['回表'],
+  scores: emptyBaguaScores(),
+};
+
+describe('createInterviewPort', () => {
+  it('resolves sessions at start time, not construction time', async () => {
+    let sessions: ExamRoomSessions | undefined;
+    const remote = {
+      acceptEntryConfig: jest.fn(async () => ({
+        ok: true as const,
+        config: {
+          topic: 'MySQL 索引与优化',
+          difficulty: 'mid' as const,
+          topicKind: 'preset' as const,
+          topicId: 'mysql',
+        },
+      })),
+      getEntryConfig: jest.fn(),
+      attachInterviewer: jest.fn(async () => ({ ok: true as const })),
+      briefCoach: jest.fn(async () => ({ ok: true as const, snapshot })),
+    };
+    const port = createInterviewPort(remote, () => sessions);
+
+    const missing = await port.startInterview(mysqlRequest);
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) {
+      expect(missing.code).toBe('inject_unavailable');
+      expect(missing.message).toBe(INTERVIEW_SESSION_ERROR_MESSAGES.inject_unavailable);
+    }
+    expect(remote.attachInterviewer).not.toHaveBeenCalled();
+
+    sessions = {
+      async create() {
+        return 'session-exam';
+      },
+      binding() {
+        return {
+          session: {
+            prompt: async () => ({ ok: true }),
+          },
+        };
+      },
+      open: jest.fn(),
+    };
+
+    const started = await port.startInterview(mysqlRequest);
+    expect(started).toEqual({ ok: true, snapshot });
+    expect(sessions.open).toHaveBeenCalledWith('session-exam');
+  });
+});

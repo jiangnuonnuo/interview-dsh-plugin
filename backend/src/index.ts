@@ -1,1 +1,1 @@
-export { apply, name } from './infra/dsh/index.js';
+export { apply, inject, name } from './infra/dsh/index.js';

@@ -2,13 +2,13 @@
 
 入口 change 已归档：`acceptEntryConfig` 只把主题/难度写入内存 store，面板成功后停在「待开考」。Host 适配层目前只 `provide('interviewEntry')`，没有 Agent 注入或第二条会话。见 `proposal.md` 的 Why。约束见 `docs/architecture/ARCHITECTURE.md` 的分层、DSH 适配层、会话隔离与安全边界：Host SDK 只在 `backend/src/infra/dsh/`，Client SDK 只在 `frontend/src/infra/dsh/`，禁止自建聊天，查不到注入 API 时标 `TODO` 而不是绕过。
 
-当前 Desktop 目标仍是 0.2.17 / harness 0.1.1-rc.2。Agent 注入、会话隔离、触发助手开口的具体 Host 符号在实现前必须对照本机已装 SDK 与官方文档核实，不得臆造。
+当前 Desktop 目标仍是 0.2.17。本机 GUI 运行时是 harness **0.1.5-rc.1**（PATH 上的 CLI 仍可能显示 0.1.1-rc.2）。对照本机 SDK 后：没有「注入当前编码对话 / 原地切断历史 / 助手无用户消息先开口」的公开 API。开考改为新开一条 DSH 对话当考场 A。
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- 合法开始后：会话 A 套在**当前**对话上；会话 B 只服务面板；第一问进宿主气泡；要点进面板。
+- 合法开始后：会话 A 是新开的 DSH 对话（考场）；会话 B 只服务面板；第一问进 A 的宿主气泡；要点进面板。`sessions.open` 之后用户看见的就是这条考场对话。
 - 提示词从 `interviewer-role-prompt.md` 八股专项参数化（岗位/主题/难度），不另配模型。
 - 注入失败对面板可见；适配层对缺失 API 写 `TODO` + 结构化错误码。
 - 契约进 `shared/`；评分判定留在后端（本 change 面板只占位）。
@@ -21,16 +21,16 @@
 
 ## Decisions
 
-### 1. 开始仍走现有 remote，成功后由 Host 侧启动双会话
+### 1. 校验走 Host remote；考场 A 由 Client `sessions` 创建
 
-保留 `acceptEntryConfig` 的校验与落 store。校验成功后同一 Host 用例调用会话端口（新建 `shared` 类型，例如 `StartInterviewResponse`：`ok` + 进行中快照或 `code`）。Client 不直接调 Host Agent API。
+保留 `acceptEntryConfig` 的校验与落 store。Client 不调 Host Agent API。开考编排在 Client 适配层：`acceptEntryConfig` → `sessions.create` → Host `attachInterviewer` → `session.prompt` → `sessions.open` → Host `briefCoach`。`sessions` 用嵌套 inject，不得写进 Client 顶层 `inject`。
 
-备选：Client 注入对话 — 否决，违反 Host/Client 边界，且 Client 沙箱没有 Agent 生命周期。
+备选：把面试官注入用户正在看的编码对话 — 否决，本机没有切断场前历史的公开 API。备选：Client 直接调 `agents` — 否决，沙箱没有 Agent 生命周期。
 
-### 2. 会话 A = 当前对话 + 面试官提示词；会话 B = 插件内不可见补全
+### 2. 会话 A = 新 DSH 对话 + Host persona；会话 B = Host `llm.stream`
 
-- **A**：官方注入/覆盖当前会话 system（或等价 Agent 角色）后，触发一次助手回合，让第一问出现在原气泡。注入时显式切断场前历史（官方「新上下文 / 忽略已有 messages」若存在则用；否则 `TODO`，并在面板失败，禁止把场前 transcript 拼进 prompt 假装隔离）。
-- **B**：Host 内第二次补全（同一模型配置），输入仅为「本场主题/难度 + 第一问题干」，输出 JSON/结构化要点，只写面板状态，不 `append` 到对话。
+- **A**：Client `sessions.create()` 得到空白会话（不 fork）。Host `ctx.agents.get(sessionId)` 在 **agent.ctx** 上 `systemPrompt.section({ name: 'deployment:persona', order: 0 })`，不要 `complete: true`。开口仍用 `session.prompt`（会留下用户种子气泡）。`sessions.open` 切到这条考场对话。
+- **B**：Host `agent.whenIdle()` 后从会话日志取第一道助手题干（Desktop 0.2.17 bundled `dsh-session` 是 `deriveMessages()`，不是 0.1.5-rc.1 类型里的 `snapshotEvents()`），再 `ctx.llm.stream`（`agentDefaultModel.currentSelection()` 的同一模型）。输出只写入进行中快照，不 `append` 到对话。
 
 备选：两条都显示在 DSH 对话 — 否决，违反双会话表。备选：面板 fetch 外网模型 — 否决，另配 AI。
 

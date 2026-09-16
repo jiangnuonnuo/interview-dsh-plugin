@@ -1,0 +1,97 @@
+.panel {
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 100%;
+  background: #ffffff;
+  color: #1c2434;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Source Han Sans SC", system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.panel *,
+.panel *::before,
+.panel *::after {
+  box-sizing: border-box;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 18px 18px 12px;
+}
+
+.close {
+  flex: 0 0 auto;
+  margin: 2px 0 0;
+  border: none;
+  background: transparent;
+  color: #6b7385;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 6px 4px 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: #6b7385;
+}
+
+.body {
+  padding: 4px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.status {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.meta {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.block {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.brief {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.points,
+.scores {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.scores li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
+  margin-left: -18px;
+  padding: 6px 0;
+  border-bottom: 1px solid #e6ebf4;
+}

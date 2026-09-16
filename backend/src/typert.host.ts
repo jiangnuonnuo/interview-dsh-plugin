@@ -31,6 +31,56 @@ const getResultSchema = z.object({
   config: z.union([entryConfigSchema, z.null()]),
 });
 
+const attachRequestSchema = z.object({
+  sessionId: z.string(),
+  topic: z.string(),
+  difficulty: difficultySchema,
+});
+
+const attachResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: z.enum(['inject_unavailable', 'coach_unavailable', 'first_question_failed']),
+    message: z.string(),
+  }),
+]);
+
+const briefRequestSchema = z.object({
+  sessionId: z.string(),
+  topic: z.string(),
+  difficulty: difficultySchema,
+});
+
+const snapshotSchema = z.object({
+  phase: z.literal('in_progress'),
+  sessionId: z.string(),
+  topic: z.string(),
+  difficulty: difficultySchema,
+  questionBrief: z.string(),
+  keyPoints: z.array(z.string()),
+  scores: z.array(
+    z.object({
+      dimension: z.string(),
+      score: z.null(),
+    }),
+  ),
+});
+
+const briefResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    snapshot: snapshotSchema,
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: z.enum(['inject_unavailable', 'coach_unavailable', 'first_question_failed']),
+    message: z.string(),
+  }),
+]);
+
 const _request$codec = {
   mode: 'strict' as const,
   typeSymbol: 'interview-dsh#AcceptEntryConfigRequest',
@@ -45,6 +95,26 @@ const _get$codec = {
   mode: 'strict' as const,
   typeSymbol: 'interview-dsh#GetEntryConfigResponse',
   schema: getResultSchema,
+};
+const _attachRequest$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#AttachInterviewerRequest',
+  schema: attachRequestSchema,
+};
+const _attachResult$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#AttachInterviewerResponse',
+  schema: attachResultSchema,
+};
+const _briefRequest$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#BriefCoachRequest',
+  schema: briefRequestSchema,
+};
+const _briefResult$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#BriefCoachResponse',
+  schema: briefResultSchema,
 };
 
 export const TYPERT = {
@@ -72,6 +142,28 @@ export const TYPERT = {
       parameters: [],
       result: _get$codec,
     },
+    {
+      id: 'interview-dsh#interviewEntry/attachInterviewer',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'attachInterviewer',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        { name: 'request', wire: 'request', source: 'json' as const, codec: _attachRequest$codec },
+      ],
+      result: _attachResult$codec,
+    },
+    {
+      id: 'interview-dsh#interviewEntry/briefCoach',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'briefCoach',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        { name: 'request', wire: 'request', source: 'json' as const, codec: _briefRequest$codec },
+      ],
+      result: _briefResult$codec,
+    },
   ],
   model: {
     services: [
@@ -79,7 +171,7 @@ export const TYPERT = {
         description: 'interview-dsh 入口配置服务，校验并保存主题与难度。',
         summary: '八股专项入口配置服务。',
         tags: [],
-        jsDoc: '/** 入口配置：acceptEntryConfig / getEntryConfig */',
+        jsDoc: '/** 入口配置：acceptEntryConfig / getEntryConfig / attachInterviewer / briefCoach */',
         key: 'interviewEntry',
         exportName: 'InterviewEntryService',
         members: [
@@ -96,6 +188,20 @@ export const TYPERT = {
             signature: 'getEntryConfig(): GetEntryConfigResponse',
             summary: '读取最近一次有效入口配置。',
             jsDoc: '/** 读取最近一次有效入口配置；尚未开始时 config 为 null。 */',
+          },
+          {
+            kind: 'method',
+            name: 'attachInterviewer',
+            signature: 'attachInterviewer(request: AttachInterviewerRequest): AttachInterviewerResponse',
+            summary: '把八股面试官人设挂到指定会话的 Agent 上。',
+            jsDoc: '/** 在已创建会话的 Agent 上挂 deployment:persona。 */',
+          },
+          {
+            kind: 'method',
+            name: 'briefCoach',
+            signature: 'briefCoach(request: BriefCoachRequest): Promise<BriefCoachResponse>',
+            summary: '根据第一问题干生成本题要点快照。',
+            jsDoc: '/** 同模型静默补全，只写进行中快照。 */',
           },
         ],
         types: [],

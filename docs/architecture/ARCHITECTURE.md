@@ -91,8 +91,10 @@ frontend/infra/dsh            backend/infra/dsh
 ### 4.1 Host 适配层
 
 - 只出现在 `backend/src/infra/dsh/`。
-- 当前 `apply` 只 `provide('interviewEntry')`。禁止在 Host 注册 Slot、右栏 tab 或输入栏按钮。
-- 查不到注入、卸载或会话隔离 API 时，适配层标 `TODO`，返回结构化错误码，禁止用自建聊天绕过。
+- Host `apply` 声明 `inject: ['agents', 'llm', 'agentDefaultModel']`，以便在新会话的 Agent 上挂 `systemPrompt.section`，并用当前默认模型做教练静默补全。
+- 当前 `apply` 的 `provide('interviewEntry')` 提供配置校验、`attachInterviewer` 与 `briefCoach`。禁止在 Host 注册 Slot、右栏 tab 或输入栏按钮。
+- 开考时 Client 先 `sessions.create()`，再 remote `attachInterviewer`；适配层用 `ctx.agents.get(sessionId)` 拿到刚创建的 Agent，在 **agent.ctx**（不是插件根 ctx）上挂 `deployment:persona`。找不到 Agent 时返回 `inject_unavailable`，禁止用自建聊天绕过。
+- 第一问出现后 Host `briefCoach`：`agent.whenIdle()`，再从会话日志取题干（Desktop 0.2.17 bundled `dsh-session` 用 `deriveMessages()`；0.1.5-rc.1 类型才有 `snapshotEvents()`，适配层按鸭子类型两者都认），再 `llm.stream` 写进行中快照。教练文本不得 `append` 到对话。读日志抛错映射为 `first_question_failed`，禁止让 Typert 吞成 internal。
 
 ### 4.2 Client 适配层
 
@@ -118,6 +120,8 @@ frontend/infra/dsh            backend/infra/dsh
 
 **打开分支（点击「面试」）：**
 
+只展开面板，不新建聊天。合法「开始」之后的开考链路在 Client 适配层：`acceptEntryConfig` → `sessions.create` → Host `attachInterviewer` → `session.prompt` → `sessions.open` → Host `briefCoach`。`sessions` 不得写进 Client 顶层 `inject`。探测顺序：先 `ctx.get('sessions')`，再嵌套 `ctx.inject(['sessions'])`；**点「开始」时再探一次**，不要只在 `apply` 时抓一次（那时这个 fiber 里可能还没有 sessions）。
+
 1. 用嵌套 `ctx.inject(['sidebarRightTabs'], …)` 尝试 `sidebarRightTabs.register({ id: 'interview-dsh/entry', kind: 'interview' })`，正文挂 `sidebar.right.pane.tab`。成功才把 `officialTabRegistered = true`。该路径缺失时不得让整个 Client `apply` 失败。
 2. 点击时：仅当上一步已成功，且 `ctx.get('sidebarRight')` 上确有 `openTab`，才调用 `openTab('interview')`。
 3. 否则 `shell.overlay` 右侧抽屉：内容 `position: fixed`、`z-index` ≥ 1000。
@@ -128,7 +132,7 @@ frontend/infra/dsh            backend/infra/dsh
 
 ## 5. 会话隔离
 
-开始面试后是两条会话，配置都来自**当前这条 DSH 对话**。插件不得另配模型或 Key。具体何时注入、第一问如何出现、面板展示哪些字段，由当前 OpenSpec change 定义。
+开始面试后是两条会话。会话 A 是 **新开的 DSH 对话**（Client `sessions.create`），不是把面试官注入用户正在看的那条编码对话。配置仍来自当前工作区 / 默认模型，插件不得另配 Key。具体开口文案与面板字段由当前 OpenSpec change 定义。
 
 | 会话 | 职责 | 架构禁止 |
 |---|---|---|

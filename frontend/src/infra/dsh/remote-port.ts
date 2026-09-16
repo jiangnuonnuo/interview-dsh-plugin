@@ -1,5 +1,15 @@
-import type { AcceptEntryConfigRequest, AcceptEntryConfigResponse, GetEntryConfigResponse } from 'interview-dsh-shared';
+import type {
+  AcceptEntryConfigRequest,
+  AcceptEntryConfigResponse,
+  AttachInterviewerRequest,
+  AttachInterviewerResponse,
+  BriefCoachRequest,
+  BriefCoachResponse,
+  GetEntryConfigResponse,
+} from 'interview-dsh-shared';
 import type { EntryPort } from '../../features/entry/entry-port';
+import { startInterview, type StartInterviewHost } from './start-interview';
+import type { ExamRoomSessions } from './start-exam-room';
 
 interface GatewayEnvelope<T> {
   readonly ok: boolean;
@@ -19,17 +29,46 @@ const unwrap = async <T>(result: Promise<T | GatewayEnvelope<T>>, method: string
   return payload as T;
 };
 
-export const createRemoteEntryPort = (remote: {
+export interface InterviewRemote {
   acceptEntryConfig: (request: AcceptEntryConfigRequest) => Promise<unknown>;
   getEntryConfig: () => Promise<unknown>;
-}): EntryPort => ({
-  acceptEntryConfig(request) {
-    return unwrap(remote.acceptEntryConfig(request) as Promise<AcceptEntryConfigResponse>, 'acceptEntryConfig');
-  },
-  getEntryConfig() {
-    return unwrap(remote.getEntryConfig() as Promise<GetEntryConfigResponse>, 'getEntryConfig');
-  },
-});
+  attachInterviewer: (request: AttachInterviewerRequest) => Promise<unknown>;
+  briefCoach: (request: BriefCoachRequest) => Promise<unknown>;
+}
+
+export type SessionsProbe = ExamRoomSessions | undefined | (() => ExamRoomSessions | undefined);
+
+const resolveSessions = (sessions: SessionsProbe): ExamRoomSessions | undefined =>
+  typeof sessions === 'function' ? sessions() : sessions;
+
+export const createInterviewPort = (
+  remote: InterviewRemote,
+  sessions: SessionsProbe,
+): EntryPort => {
+  const host: StartInterviewHost = {
+    acceptEntryConfig(request) {
+      return unwrap(remote.acceptEntryConfig(request) as Promise<AcceptEntryConfigResponse>, 'acceptEntryConfig');
+    },
+    attachInterviewer(request) {
+      return unwrap(remote.attachInterviewer(request) as Promise<AttachInterviewerResponse>, 'attachInterviewer');
+    },
+    briefCoach(request) {
+      return unwrap(remote.briefCoach(request) as Promise<BriefCoachResponse>, 'briefCoach');
+    },
+  };
+
+  return {
+    acceptEntryConfig(request) {
+      return host.acceptEntryConfig(request);
+    },
+    getEntryConfig() {
+      return unwrap(remote.getEntryConfig() as Promise<GetEntryConfigResponse>, 'getEntryConfig');
+    },
+    startInterview(request) {
+      return startInterview({ sessions: resolveSessions(sessions), host }, request);
+    },
+  };
+};
 
 export const createUnavailableEntryPort = (reason: string): EntryPort => ({
   async acceptEntryConfig() {
@@ -37,5 +76,8 @@ export const createUnavailableEntryPort = (reason: string): EntryPort => ({
   },
   async getEntryConfig() {
     return { config: null };
+  },
+  async startInterview() {
+    throw new Error(reason);
   },
 });

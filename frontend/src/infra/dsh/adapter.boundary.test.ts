@@ -73,4 +73,16 @@ describe('frontend DSH adapter boundary', () => {
   it('does not add a features/chat directory', () => {
     expect(() => readdirSync(join(process.cwd(), 'src/features/chat'))).toThrow();
   });
+
+  it('does not call fetch /api from the client adapter', () => {
+    const adapterDir = join(process.cwd(), 'src/infra/dsh');
+    const source = walk(adapterDir)
+      .filter((file) => /\.(ts|tsx)$/.test(file) && !file.includes('.test.'))
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+    expect(source).not.toMatch(/fetch\(['"`]\/api\//);
+    expect(source).toMatch(/readService\(ctx, 'sessions'\)/);
+    expect(source).toMatch(/inject\(\['sessions'\]/);
+    expect(source).not.toMatch(/inject = \['slots', 'remote', 'sessions'\]/);
+  });
 });

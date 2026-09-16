@@ -1,12 +1,14 @@
 import {
   CUSTOM_TOPIC_ID,
   ENTRY_ERROR_MESSAGES,
+  emptyBaguaScores,
   findPresetTopic,
   isDifficulty,
   type AcceptEntryConfigRequest,
   type AcceptEntryConfigResponse,
   type EntryConfig,
   type GetEntryConfigResponse,
+  type StartInterviewResponse,
 } from 'interview-dsh-shared';
 import type { EntryPort } from './entry-port';
 
@@ -48,6 +50,24 @@ export const createMemoryEntryPort = (): EntryPort => {
     },
     async getEntryConfig(): Promise<GetEntryConfigResponse> {
       return { config: current };
+    },
+    async startInterview(request: AcceptEntryConfigRequest): Promise<StartInterviewResponse> {
+      const accepted = await this.acceptEntryConfig(request);
+      if (!accepted.ok) {
+        return accepted;
+      }
+      return {
+        ok: true,
+        snapshot: {
+          phase: 'in_progress',
+          sessionId: 'memory-session',
+          topic: accepted.config.topic,
+          difficulty: accepted.config.difficulty,
+          questionBrief: `${accepted.config.topic} · 第一问摘要`,
+          keyPoints: ['要点一', '要点二'],
+          scores: emptyBaguaScores(),
+        },
+      };
     },
   };
 };

@@ -7,9 +7,10 @@ import {
   PRESET_TOPICS,
   TOPIC_CATEGORIES,
   type Difficulty,
-  type EntryConfig,
+  type InProgressSnapshot,
 } from 'interview-dsh-shared';
 import type { EntryPort } from './entry-port';
+import { InProgressPanel } from '../session/InProgressPanel';
 import styles from './EntryPanel.module.css';
 
 const TOPIC_ICONS: Record<string, { background: string; svg: ReactElement }> = {
@@ -104,7 +105,7 @@ const PanelHead = ({ onClose }: { onClose?: () => void }) => (
       </div>
       <div>
         <h1 className={styles.title}>模拟面试</h1>
-        <p className={styles.sub}>八股专项陪练 · 当前对话当考场</p>
+        <p className={styles.sub}>八股专项陪练 · 新开对话当考场</p>
       </div>
     </div>
   </header>
@@ -117,7 +118,7 @@ export const EntryPanel = ({ port, onClose }: EntryPanelProps) => {
   const [customTopic, setCustomTopic] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty>(DEFAULT_DIFFICULTY);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<EntryConfig | null>(null);
+  const [snapshot, setSnapshot] = useState<InProgressSnapshot | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -156,17 +157,17 @@ export const EntryPanel = ({ port, onClose }: EntryPanelProps) => {
     setSubmitting(true);
     setError(null);
     try {
-      const result = await port.acceptEntryConfig({
+      const result = await port.startInterview({
         topicId,
         customTopic,
         difficulty,
       });
       if (!result.ok) {
         setError(result.message);
-        setPending(null);
+        setSnapshot(null);
         return;
       }
-      setPending(result.config);
+      setSnapshot(result.snapshot);
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -174,20 +175,8 @@ export const EntryPanel = ({ port, onClose }: EntryPanelProps) => {
     }
   };
 
-  if (pending) {
-    return (
-      <aside className={styles.panel} aria-label="模拟面试入口">
-        <PanelHead onClose={onClose} />
-        <div className={styles.body}>
-          <section className={styles.pending} data-testid="entry-pending">
-            <h2 className={styles.pendingTitle}>待开考</h2>
-            <p className={styles.pendingMeta}>主题：{pending.topic}</p>
-            <p className={styles.pendingMeta}>难度：{DIFFICULTY_LABELS[pending.difficulty]}</p>
-            <p className={styles.pendingNote}>配置已记下，面试官尚未接入。</p>
-          </section>
-        </div>
-      </aside>
-    );
+  if (snapshot) {
+    return <InProgressPanel snapshot={snapshot} onClose={onClose} />;
   }
 
   return (
@@ -308,9 +297,9 @@ export const EntryPanel = ({ port, onClose }: EntryPanelProps) => {
             开始模拟面试
           </button>
           <p className={styles.hint}>
-            占用当前这条对话，不另开聊天页。
+            开始后新开一条面试对话当考场，要点只出现在面板。
             <br />
-            开始后先记下主题与难度，本场不选时长、不选文件夹。
+            本场不选时长、不选文件夹。
           </p>
         </section>
       </div>

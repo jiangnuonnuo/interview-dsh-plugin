@@ -31,6 +31,56 @@ const getResultSchema = z.object({
   config: z.union([entryConfigSchema, z.null()]),
 });
 
+const attachRequestSchema = z.object({
+  sessionId: z.string(),
+  topic: z.string(),
+  difficulty: difficultySchema,
+});
+
+const attachResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: z.enum(['inject_unavailable', 'coach_unavailable', 'first_question_failed']),
+    message: z.string(),
+  }),
+]);
+
+const briefRequestSchema = z.object({
+  sessionId: z.string(),
+  topic: z.string(),
+  difficulty: difficultySchema,
+});
+
+const snapshotSchema = z.object({
+  phase: z.literal('in_progress'),
+  sessionId: z.string(),
+  topic: z.string(),
+  difficulty: difficultySchema,
+  questionBrief: z.string(),
+  keyPoints: z.array(z.string()),
+  scores: z.array(
+    z.object({
+      dimension: z.string(),
+      score: z.null(),
+    }),
+  ),
+});
+
+const briefResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    snapshot: snapshotSchema,
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: z.enum(['inject_unavailable', 'coach_unavailable', 'first_question_failed']),
+    message: z.string(),
+  }),
+]);
+
 const strict = (typeSymbol: string, schema: z.ZodTypeAny) => ({
   mode: 'strict' as const,
   typeSymbol,
@@ -65,6 +115,38 @@ export const interviewEntryRemote = {
       invocation: { kind: 'direct' as const },
       parameters: [],
       result: strict('interview-dsh#GetEntryConfigResponse', getResultSchema),
+    },
+    {
+      id: 'interview-dsh#interviewEntry/attachInterviewer',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'attachInterviewer',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        {
+          name: 'request',
+          wire: 'request',
+          source: 'json' as const,
+          codec: strict('interview-dsh#AttachInterviewerRequest', attachRequestSchema),
+        },
+      ],
+      result: strict('interview-dsh#AttachInterviewerResponse', attachResultSchema),
+    },
+    {
+      id: 'interview-dsh#interviewEntry/briefCoach',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'briefCoach',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        {
+          name: 'request',
+          wire: 'request',
+          source: 'json' as const,
+          codec: strict('interview-dsh#BriefCoachRequest', briefRequestSchema),
+        },
+      ],
+      result: strict('interview-dsh#BriefCoachResponse', briefResultSchema),
     },
   ],
 };

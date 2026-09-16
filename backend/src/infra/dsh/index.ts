@@ -1,1 +1,1 @@
-export { apply, name } from './adapter.js';
+export { apply, inject, name } from './adapter.js';

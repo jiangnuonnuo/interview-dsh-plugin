@@ -1,19 +1,32 @@
 import {
   CUSTOM_TOPIC_ID,
   ENTRY_ERROR_MESSAGES,
+  INTERVIEW_SESSION_ERROR_MESSAGES,
   findPresetTopic,
   isDifficulty,
   type AcceptEntryConfigRequest,
   type AcceptEntryConfigResponse,
+  type AttachInterviewerRequest,
+  type AttachInterviewerResponse,
+  type BriefCoachRequest,
+  type BriefCoachResponse,
   type EntryConfig,
   type EntryErrorCode,
   type GetEntryConfigResponse,
 } from 'interview-dsh-shared';
 import type { EntryConfigStore } from '../data/entry-config-store.js';
+import { briefCoachSession, type CoachRuntime } from './coach-brief.js';
+import { assembleInterviewerPersona } from './interviewer-persona.js';
+
+export interface InterviewerPersonaInstaller {
+  install(sessionId: string, text: string): AttachInterviewerResponse;
+}
 
 export interface InterviewEntryService {
   acceptEntryConfig(request: AcceptEntryConfigRequest): AcceptEntryConfigResponse;
   getEntryConfig(): GetEntryConfigResponse;
+  attachInterviewer(request: AttachInterviewerRequest): AttachInterviewerResponse;
+  briefCoach(request: BriefCoachRequest): Promise<BriefCoachResponse>;
 }
 
 const failure = (code: EntryErrorCode): AcceptEntryConfigResponse => ({
@@ -22,8 +35,27 @@ const failure = (code: EntryErrorCode): AcceptEntryConfigResponse => ({
   message: ENTRY_ERROR_MESSAGES[code],
 });
 
+const unavailablePersona: InterviewerPersonaInstaller = {
+  install: () => ({
+    ok: false,
+    code: 'inject_unavailable',
+    message: INTERVIEW_SESSION_ERROR_MESSAGES.inject_unavailable,
+  }),
+};
+
+const unavailableCoach: CoachRuntime = {
+  readFirstQuestion: async () => ({
+    ok: false,
+    code: 'first_question_failed',
+    message: INTERVIEW_SESSION_ERROR_MESSAGES.first_question_failed,
+  }),
+  complete: async () => null,
+};
+
 export const createInterviewEntryService = (
   store: EntryConfigStore,
+  persona: InterviewerPersonaInstaller = unavailablePersona,
+  coach: CoachRuntime = unavailableCoach,
 ): InterviewEntryService => ({
   acceptEntryConfig(request) {
     if (!isDifficulty(request.difficulty)) {
@@ -65,5 +97,15 @@ export const createInterviewEntryService = (
   },
   getEntryConfig() {
     return { config: store.load() };
+  },
+  attachInterviewer(request) {
+    const text = assembleInterviewerPersona({
+      topic: request.topic,
+      difficulty: request.difficulty,
+    });
+    return persona.install(request.sessionId, text);
+  },
+  briefCoach(request) {
+    return briefCoachSession(coach, request);
   },
 });

@@ -68,4 +68,23 @@ describe('interview-entry.service', () => {
       expect(result.code).toBe('invalid_difficulty');
     }
   });
+
+  it('attaches assembled persona text through the installer', () => {
+    const install = jest.fn(() => ({ ok: true as const }));
+    const service = createInterviewEntryService(createEntryConfigStore(), {
+      install,
+    });
+    const result = service.attachInterviewer({
+      sessionId: 'session-exam',
+      topic: 'MySQL 索引与优化',
+      difficulty: 'mid',
+    });
+    expect(result).toEqual({ ok: true });
+    expect(install).toHaveBeenCalledTimes(1);
+    const [sessionId, text] = install.mock.calls[0];
+    expect(sessionId).toBe('session-exam');
+    expect(text).toContain('MySQL 索引与优化');
+    expect(text).toContain('八股专项');
+    expect(text).not.toMatch(/标准答要点/);
+  });
 });

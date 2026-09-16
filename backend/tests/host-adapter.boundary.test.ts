@@ -22,6 +22,17 @@ const walk = (dir: string): string[] => {
 };
 
 describe('backend DSH adapter boundary', () => {
+  it('keeps services free of Host Agent SDK', () => {
+    const source = walk(join(srcRoot, 'services'))
+      .filter((file) => file.endsWith('.ts'))
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+    expect(source).not.toMatch(/agents\.get/);
+    expect(source).not.toMatch(/ctx\.agents/);
+    expect(source).not.toMatch(/llm\.stream/);
+    expect(source).not.toMatch(/agentDefaultModel/);
+  });
+
   it('does not register sidebarRightTabs or header buttons', () => {
     const source = walk(srcRoot)
       .filter((file) => file.endsWith('.ts'))
@@ -31,6 +42,16 @@ describe('backend DSH adapter boundary', () => {
     expect(source).not.toMatch(/sidebar\.right\.pane\.tab/);
     expect(source).not.toMatch(/conversation\.session\.header/);
     expect(source).not.toMatch(/openTab\(/);
+  });
+
+  it('does not append coach output onto the conversation log', () => {
+    const adapterDir = join(srcRoot, 'infra/dsh');
+    const source = walk(adapterDir)
+      .filter((file) => file.endsWith('.ts'))
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+    expect(source).not.toMatch(/session\.append\(/);
+    expect(source).not.toMatch(/appendMessage/);
   });
 
   it('does not mention the retired interviewer identifier in src', () => {

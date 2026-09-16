@@ -1,12 +1,12 @@
 import { createElement } from 'react';
 import { EntryPanel } from '../../features/entry/EntryPanel';
 import type { EntryPort } from '../../features/entry/entry-port';
-import type { AcceptEntryConfigRequest } from 'interview-dsh-shared';
 import { InterviewTriggerButton } from './InterviewTriggerButton';
 import { ENTRY_OVERLAY_ID, InterviewSlotPanel } from './InterviewSlotPanel';
 import { entrySurface } from './entry-surface';
 import { interviewEntryRemote } from './remote';
-import { createRemoteEntryPort, createUnavailableEntryPort } from './remote-port';
+import { createInterviewPort, createUnavailableEntryPort, type InterviewRemote } from './remote-port';
+import type { ExamRoomSessions } from './start-exam-room';
 
 export const name = 'interview-dsh';
 export const inject = ['slots', 'remote'];
@@ -57,6 +57,39 @@ const readService = (ctx: ClientContext, key: string): unknown => {
     }
   }
   return (ctx as unknown as Record<string, unknown>)[key];
+};
+
+const asExamRoomSessions = (value: unknown): ExamRoomSessions | undefined => {
+  if (value === null || typeof value !== 'object') {
+    return undefined;
+  }
+  const sessions = value as Partial<ExamRoomSessions>;
+  if (typeof sessions.create !== 'function') {
+    return undefined;
+  }
+  return sessions as ExamRoomSessions;
+};
+
+/**
+ * `sessions` 不能写进 Client 顶层 inject。探测只用 ctx.get，再退回嵌套 inject。
+ * 必须在点「开始」时再探一次：apply 时会话服务可能还没进这个 fiber。
+ */
+const probeSessions = (ctx: ClientContext): ExamRoomSessions | undefined => {
+  const fromGet = asExamRoomSessions(readService(ctx, 'sessions'));
+  if (fromGet !== undefined) {
+    return fromGet;
+  }
+  try {
+    let found: ExamRoomSessions | undefined;
+    ctx.inject(['sessions'], (scoped) => {
+      found =
+        asExamRoomSessions((scoped as ClientContext & { sessions?: unknown }).sessions) ??
+        asExamRoomSessions(readService(scoped, 'sessions'));
+    });
+    return found;
+  } catch {
+    return undefined;
+  }
 };
 
 const officialOpenTab = (ctx: ClientContext): ((kind: string) => void) | undefined => {
@@ -118,14 +151,9 @@ export async function apply(ctx: ClientContext): Promise<void> {
         dispose();
       }
     }, 'interview-dsh: remote contribution');
-        const namespace = readService(ctx, 'remote.interviewEntry') as
-          | {
-              acceptEntryConfig: (request: AcceptEntryConfigRequest) => Promise<unknown>;
-              getEntryConfig: () => Promise<unknown>;
-            }
-          | undefined;
+        const namespace = readService(ctx, 'remote.interviewEntry') as InterviewRemote | undefined;
     if (namespace !== undefined) {
-      port = createRemoteEntryPort(namespace);
+      port = createInterviewPort(namespace, () => probeSessions(ctx));
     }
   }
 
