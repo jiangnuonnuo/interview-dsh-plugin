@@ -6,7 +6,7 @@ DSH 八股专项模拟面试插件。面试发生在 **DSH 现有对话**里；�
 
 | 文件 | 内容 |
 |---|---|
-| `Agent.md` | 易忘事实、已拍板决策、开发过程 |
+| `AGENTS.md` | 项目级代理约束 |
 | `docs/architecture/ARCHITECTURE.md` | 架构设计与编码规范 |
 | `docs/product/REQUIREMENTS.md` | 产品定位与使用者 |
 | `openspec/changes/` | 当前能力的实现 change |

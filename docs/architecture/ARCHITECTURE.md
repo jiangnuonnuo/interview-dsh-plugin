@@ -4,7 +4,7 @@
 
 - 产品定位与使用者见 `docs/product/REQUIREMENTS.md`，不要用本文改写成产品说明书。
 - 当前能力、交互和验收以 OpenSpec change 为准，不要用本文锁死产品主链路。
-- 易忘事实与过程准则见 `Agent.md`。
+- 易忘事实与过程准则见 `AGENTS.md`。
 
 实现与本文冲突时，先改本文并说明原因，再改代码。
 
@@ -86,7 +86,7 @@ frontend/infra/dsh            backend/infra/dsh
 
 ## 4. DSH 适配层
 
-选型结论（桌面端版本、better-sidebar、验收替身）见 `Agent.md`。下面是装配设计，改接法先改本节。
+选型结论（桌面端版本、better-sidebar、验收替身）见 `AGENTS.md`。下面是装配设计，改接法先改本节。
 
 ### 4.1 Host 适配层
 

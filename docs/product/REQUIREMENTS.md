@@ -6,7 +6,7 @@
 
 - 当前这一刀做什么、做到什么程度、如何验收：以 OpenSpec change 为准。
 - 代码怎么拆、DSH 怎么接：`docs/architecture/ARCHITECTURE.md`。
-- 易忘事实与开发过程：`Agent.md`。
+- 易忘事实与开发过程：`AGENTS.md`。
 
 后续开发以 OpenSpec 讨论和 change 产物推进。发现本文与 change 不一致时，改的是 change 或本文的方向描述，而不是让实现去迁就一份过时的主链路。
 
