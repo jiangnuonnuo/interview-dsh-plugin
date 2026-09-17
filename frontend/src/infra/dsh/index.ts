@@ -1,6 +1,7 @@
 import { createElement } from 'react';
 import { EntryPanel } from '../../features/entry/EntryPanel';
 import type { EntryPort } from '../../features/entry/entry-port';
+import { examPanelState } from '../../features/entry/exam-panel-state';
 import { InterviewTriggerButton } from './InterviewTriggerButton';
 import { ENTRY_OVERLAY_ID, InterviewSlotPanel } from './InterviewSlotPanel';
 import { entrySurface } from './entry-surface';
@@ -30,6 +31,11 @@ interface SidebarTabsApi {
 
 interface SidebarRightApi {
   openTab: (kind: string) => void;
+}
+
+interface LayoutPanels {
+  openDetails: () => void;
+  closeDetails: () => void;
 }
 
 interface RemoteApi {
@@ -100,12 +106,59 @@ const officialOpenTab = (ctx: ClientContext): ((kind: string) => void) | undefin
   return (kind: string) => sidebarRight.openTab(kind);
 };
 
-const openOverlayFallback = (cause?: unknown): void => {
+const asLayout = (value: unknown): LayoutPanels | undefined => {
+  if (value === null || typeof value !== 'object') {
+    return undefined;
+  }
+  const layout = value as Partial<LayoutPanels>;
+  if (typeof layout.openDetails !== 'function' || typeof layout.closeDetails !== 'function') {
+    return undefined;
+  }
+  return layout as LayoutPanels;
+};
+
+const probeLayout = (ctx: ClientContext): LayoutPanels | undefined => {
+  const fromGet = asLayout(readService(ctx, 'layout'));
+  if (fromGet !== undefined) {
+    return fromGet;
+  }
+  try {
+    let found: LayoutPanels | undefined;
+    ctx.inject(['layout'], (scoped) => {
+      found =
+        asLayout((scoped as ClientContext & { layout?: unknown }).layout) ??
+        asLayout(readService(scoped, 'layout'));
+    });
+    return found;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * overlay 是浮层，不会挤对话列。打开官方 details 列让出右栏；关闭时钉住考场会话，避免回到空白新会话。
+ * 禁止注册 `details` 槽，那会盖掉宿主 DetailsPanel。
+ */
+const openOverlayChrome = (ctx: ClientContext): void => {
+  probeLayout(ctx)?.openDetails();
+};
+
+const closeOverlayChrome = (ctx: ClientContext): void => {
+  entrySurface.close();
+  probeLayout(ctx)?.closeDetails();
+  const sessionId = examPanelState.get()?.sessionId;
+  if (sessionId !== undefined && sessionId.length > 0) {
+    probeSessions(ctx)?.open(sessionId);
+  }
+};
+
+const openOverlayFallback = (ctx: ClientContext, cause?: unknown): void => {
   try {
     if (entrySurface.isOpen()) {
       return;
     }
     entrySurface.open();
+    openOverlayChrome(ctx);
   } catch (overlayCause: unknown) {
     entrySurface.fail(overlayCause);
     throw overlayCause instanceof Error ? overlayCause : new Error(String(overlayCause));
@@ -125,9 +178,14 @@ export const openInterviewTab = (ctx: ClientContext): void => {
         return;
       }
     }
-    entrySurface.toggle();
+    if (entrySurface.isOpen()) {
+      closeOverlayChrome(ctx);
+      return;
+    }
+    entrySurface.open();
+    openOverlayChrome(ctx);
   } catch (cause: unknown) {
-    openOverlayFallback(cause);
+    openOverlayFallback(ctx, cause);
   }
 };
 
@@ -177,7 +235,12 @@ export async function apply(ctx: ClientContext): Promise<void> {
         order: 40,
         label: '面试',
       },
-      () => createElement(InterviewSlotPanel, { port }),
+      () =>
+        createElement(InterviewSlotPanel, {
+          port,
+          onClose: () => closeOverlayChrome(ctx),
+          onExamLive: () => openOverlayChrome(ctx),
+        }),
     ),
   );
 

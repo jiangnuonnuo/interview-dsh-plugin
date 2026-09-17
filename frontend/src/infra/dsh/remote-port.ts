@@ -6,6 +6,8 @@ import type {
   BriefCoachRequest,
   BriefCoachResponse,
   GetEntryConfigResponse,
+  WatchCoachTurnRequest,
+  WatchCoachTurnResponse,
 } from 'interview-dsh-shared';
 import type { EntryPort } from '../../features/entry/entry-port';
 import { startInterview, type StartInterviewHost } from './start-interview';
@@ -34,6 +36,7 @@ export interface InterviewRemote {
   getEntryConfig: () => Promise<unknown>;
   attachInterviewer: (request: AttachInterviewerRequest) => Promise<unknown>;
   briefCoach: (request: BriefCoachRequest) => Promise<unknown>;
+  watchCoachTurn: (request: WatchCoachTurnRequest) => Promise<unknown>;
 }
 
 export type SessionsProbe = ExamRoomSessions | undefined | (() => ExamRoomSessions | undefined);
@@ -67,6 +70,9 @@ export const createInterviewPort = (
     startInterview(request) {
       return startInterview({ sessions: resolveSessions(sessions), host }, request);
     },
+    watchCoachTurn(request) {
+      return unwrap(remote.watchCoachTurn(request) as Promise<WatchCoachTurnResponse>, 'watchCoachTurn');
+    },
   };
 };
 
@@ -78,6 +84,9 @@ export const createUnavailableEntryPort = (reason: string): EntryPort => ({
     return { config: null };
   },
   async startInterview() {
+    throw new Error(reason);
+  },
+  async watchCoachTurn() {
     throw new Error(reason);
   },
 });

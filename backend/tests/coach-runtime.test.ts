@@ -28,7 +28,7 @@ describe('createHostCoachRuntime', () => {
       },
     });
 
-    const question = await runtime.readFirstQuestion('session-exam');
+    const question = await runtime.readLatestQuestion('session-exam');
     expect(question).toEqual({
       ok: true,
       text: '请说明 InnoDB 聚簇索引和二级索引的区别。',
@@ -53,7 +53,7 @@ describe('createHostCoachRuntime', () => {
       },
     });
 
-    await expect(runtime.readFirstQuestion('session-exam')).resolves.toEqual({
+    await expect(runtime.readLatestQuestion('session-exam')).resolves.toEqual({
       ok: true,
       text: '请对比聚簇索引和二级索引。',
     });
@@ -73,7 +73,7 @@ describe('createHostCoachRuntime', () => {
       },
     });
 
-    const question = await runtime.readFirstQuestion('session-exam');
+    const question = await runtime.readLatestQuestion('session-exam');
     expect(question.ok).toBe(false);
     if (!question.ok) {
       expect(question.code).toBe('first_question_failed');
@@ -113,5 +113,273 @@ describe('createHostCoachRuntime', () => {
     const options = stream.mock.calls[0][0];
     expect(options.system).toBe('教练 system');
     expect(options.model).toBe('step-3.7-flash');
+  });
+
+  it('reads the latest assistant when two questions are in the log', async () => {
+    const runtime = createHostCoachRuntime({
+      agents: {
+        get: () => ({
+          whenIdle: async () => undefined,
+          status: 'idle',
+          session: {
+            deriveMessages: () => [
+              {
+                role: 'assistant',
+                content: [{ type: 'text', text: '请说明聚簇索引。' }],
+              },
+              {
+                role: 'user',
+                content: [{ type: 'text', text: '叶子节点存行。' }],
+              },
+              {
+                role: 'assistant',
+                content: [{ type: 'text', text: '二级索引如何回表？' }],
+              },
+            ],
+          },
+        }),
+      },
+    });
+
+    await expect(runtime.readLatestQuestion('session-exam')).resolves.toEqual({
+      ok: true,
+      text: '二级索引如何回表？',
+    });
+  });
+
+  it('prefers session events when deriveMessages is still the first question', async () => {
+    const runtime = createHostCoachRuntime({
+      agents: {
+        get: () => ({
+          whenIdle: async () => undefined,
+          status: 'idle',
+          session: {
+            deriveMessages: () => [
+              {
+                role: 'assistant',
+                content: [{ type: 'text', text: '请说明聚簇索引。' }],
+              },
+            ],
+            events: [
+              {
+                type: 'assistant/message',
+                data: {
+                  message: {
+                    content: [{ type: 'text', text: '请说明聚簇索引。' }],
+                  },
+                },
+              },
+              {
+                type: 'assistant/message',
+                data: {
+                  message: {
+                    content: [{ type: 'text', text: '覆盖索引如何避免回表？' }],
+                  },
+                },
+              },
+            ],
+          },
+        }),
+      },
+    });
+
+    await expect(runtime.readLatestQuestion('session-exam')).resolves.toEqual({
+      ok: true,
+      text: '覆盖索引如何避免回表？',
+    });
+  });
+
+  it('does not treat a running partial as the next question', async () => {
+    const runtime = createHostCoachRuntime(
+      {
+        agents: {
+          get: () => ({
+            whenIdle: async () => undefined,
+            status: 'running',
+            session: {
+              deriveMessages: () => [
+                {
+                  role: 'assistant',
+                  content: [{ type: 'text', text: '请说明聚簇索引。' }],
+                },
+                {
+                  role: 'assistant',
+                  content: [{ type: 'text', text: '二级索引半句' }],
+                },
+              ],
+            },
+          }),
+        },
+      },
+      { timeoutMs: 80, pollMs: 20 },
+    );
+
+    await expect(runtime.awaitNewQuestion('session-exam', '请说明聚簇索引。')).resolves.toEqual({
+      ok: true,
+      status: 'unchanged',
+    });
+  });
+
+  it('reads the third question after two user answers', async () => {
+    const q1 = 'Redis 单条命令为何天然原子？';
+    const q2 = '客户端 GET+SET 为何必须 WATCH 或 Lua？';
+    const q3 = 'Redisson 看门狗为什么在客户端续期？';
+    const runtime = createHostCoachRuntime({
+      agents: {
+        get: () => ({
+          whenIdle: async () => undefined,
+          status: 'idle',
+          session: {
+            events: [
+              { type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: '开始' }], source: { kind: 'user' } } },
+              { type: 'assistant/message', data: { message: { role: 'assistant', content: [{ type: 'text', text: q1 }], source: { kind: 'model' } } } },
+              { type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: '因为单线程。' }], source: { kind: 'user' } } },
+              { type: 'assistant/message', data: { message: { role: 'assistant', content: [{ type: 'text', text: q2 }], source: { kind: 'model' } } } },
+              { type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: '不知道，下一题' }], source: { kind: 'user' } } },
+              { type: 'assistant/message', data: { message: { role: 'assistant', content: [{ type: 'text', text: q3 }], source: { kind: 'model' } } } },
+            ],
+          },
+        }),
+      },
+    });
+
+    await expect(runtime.readLatestQuestion('session-exam')).resolves.toEqual({ ok: true, text: q3 });
+    await expect(runtime.awaitNewQuestion('session-exam', q2)).resolves.toEqual({
+      ok: true,
+      status: 'ready',
+      text: q3,
+    });
+  });
+
+  it('uses streamed text-delta after the last user when deriveMessages is still the previous question', async () => {
+    const q2 = '客户端 GET+SET 为何必须 WATCH 或 Lua？';
+    const q3 = 'Redisson 看门狗为什么在客户端续期？';
+    const runtime = createHostCoachRuntime(
+      {
+        agents: {
+          get: () => ({
+            whenIdle: async () => undefined,
+            status: 'idle',
+            session: {
+              deriveMessages: () => [
+                { role: 'assistant', content: [{ type: 'text', text: q2 }] },
+              ],
+              events: [
+                { type: 'assistant/message', data: { message: { role: 'assistant', content: [{ type: 'text', text: q2 }], source: { kind: 'model' } } } },
+                { type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: '不知道，下一题' }], source: { kind: 'user' } } },
+                { type: 'assistant/chunk', data: { chunk: { type: 'text-delta', text: q3 } } },
+              ],
+            },
+          }),
+        },
+      },
+      { timeoutMs: 80, pollMs: 20 },
+    );
+
+    await expect(runtime.awaitNewQuestion('session-exam', q2)).resolves.toEqual({
+      ok: true,
+      status: 'ready',
+      text: q3,
+    });
+  });
+
+  it('ignores a later plugin assistant and keeps the interviewer question', async () => {
+    const q3 = 'Redisson 看门狗为什么在客户端续期？';
+    const runtime = createHostCoachRuntime({
+      agents: {
+        get: () => ({
+          whenIdle: async () => undefined,
+          status: 'idle',
+          session: {
+            events: [
+              { type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: '不知道' }], source: { kind: 'user' } } },
+              {
+                type: 'assistant/message',
+                data: {
+                  message: {
+                    role: 'assistant',
+                    content: [{ type: 'text', text: q3 }],
+                    source: { kind: 'model' },
+                  },
+                },
+              },
+              {
+                type: 'assistant/message',
+                data: {
+                  message: {
+                    role: 'assistant',
+                    content: [{ type: 'text', text: '{"questionBrief":"旧题"}' }],
+                    source: { kind: 'plugin', plugin: 'interview-dsh' },
+                  },
+                },
+              },
+            ],
+          },
+        }),
+      },
+    });
+
+    await expect(runtime.readLatestQuestion('session-exam')).resolves.toEqual({ ok: true, text: q3 });
+  });
+
+  it('waits until idle after a new streamed question appears', async () => {
+    const q2 = '客户端 GET+SET 为何必须 WATCH 或 Lua？';
+    const q3 = 'Redisson 看门狗为什么在客户端续期？';
+    let status: 'idle' | 'running' = 'running';
+    const events: unknown[] = [
+      { type: 'assistant/message', data: { message: { role: 'assistant', content: [{ type: 'text', text: q2 }], source: { kind: 'model' } } } },
+      { type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: '不知道，下一题' }], source: { kind: 'user' } } },
+      { type: 'assistant/chunk', data: { chunk: { type: 'text-delta', text: q3 } } },
+    ];
+    const runtime = createHostCoachRuntime(
+      {
+        agents: {
+          get: () => ({
+            whenIdle: async () => {
+              await new Promise((resolve) => {
+                setTimeout(resolve, 30);
+              });
+              status = 'idle';
+              events.push({
+                type: 'assistant/message',
+                data: {
+                  message: { role: 'assistant', content: [{ type: 'text', text: q3 }], source: { kind: 'model' } },
+                },
+              });
+            },
+            get status() {
+              return status;
+            },
+            session: { events },
+          }),
+        },
+      },
+      { timeoutMs: 200, pollMs: 20 },
+    );
+
+    await expect(runtime.awaitNewQuestion('session-exam', q2)).resolves.toEqual({
+      ok: true,
+      status: 'ready',
+      text: q3,
+    });
+  });
+
+  it('maps a missing question log reader to follow_up_failed', async () => {
+    const runtime = createHostCoachRuntime({
+      agents: {
+        get: () => ({
+          whenIdle: async () => undefined,
+          status: 'idle',
+          session: {},
+        }),
+      },
+    });
+
+    const result = await runtime.awaitNewQuestion('session-exam', 'Q1');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('follow_up_failed');
+      expect(result.message.length).toBeGreaterThan(0);
+    }
   });
 });

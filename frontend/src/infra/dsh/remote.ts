@@ -37,13 +37,20 @@ const attachRequestSchema = z.object({
   difficulty: difficultySchema,
 });
 
+const sessionErrorSchema = z.enum([
+  'inject_unavailable',
+  'coach_unavailable',
+  'first_question_failed',
+  'follow_up_failed',
+]);
+
 const attachResultSchema = z.union([
   z.object({
     ok: z.literal(true),
   }),
   z.object({
     ok: z.literal(false),
-    code: z.enum(['inject_unavailable', 'coach_unavailable', 'first_question_failed']),
+    code: sessionErrorSchema,
     message: z.string(),
   }),
 ]);
@@ -76,7 +83,28 @@ const briefResultSchema = z.union([
   }),
   z.object({
     ok: z.literal(false),
-    code: z.enum(['inject_unavailable', 'coach_unavailable', 'first_question_failed']),
+    code: sessionErrorSchema,
+    message: z.string(),
+  }),
+]);
+
+const watchRequestSchema = z.object({
+  sessionId: z.string(),
+});
+
+const watchResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    status: z.literal('updated'),
+    snapshot: snapshotSchema,
+  }),
+  z.object({
+    ok: z.literal(true),
+    status: z.literal('unchanged'),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: sessionErrorSchema,
     message: z.string(),
   }),
 ]);
@@ -147,6 +175,22 @@ export const interviewEntryRemote = {
         },
       ],
       result: strict('interview-dsh#BriefCoachResponse', briefResultSchema),
+    },
+    {
+      id: 'interview-dsh#interviewEntry/watchCoachTurn',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'watchCoachTurn',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        {
+          name: 'request',
+          wire: 'request',
+          source: 'json' as const,
+          codec: strict('interview-dsh#WatchCoachTurnRequest', watchRequestSchema),
+        },
+      ],
+      result: strict('interview-dsh#WatchCoachTurnResponse', watchResultSchema),
     },
   ],
 };

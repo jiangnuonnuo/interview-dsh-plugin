@@ -1,8 +1,12 @@
 import { render, screen } from '@testing-library/react';
 import { EntryPanel } from './EntryPanel';
 import { createMemoryEntryPort } from './memory-port';
+import { examPanelState } from './exam-panel-state';
 
 describe('EntryPanel regressions', () => {
+  afterEach(() => {
+    examPanelState.set(null);
+  });
   it('does not render duration, folder picker, chat list, composer, or bubbles', () => {
     render(<EntryPanel port={createMemoryEntryPort()} />);
     expect(screen.queryByText(/30\s*分钟/)).toBeNull();

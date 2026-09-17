@@ -9,11 +9,13 @@ import {
   type EntryConfig,
   type GetEntryConfigResponse,
   type StartInterviewResponse,
+  type WatchCoachTurnResponse,
 } from 'interview-dsh-shared';
 import type { EntryPort } from './entry-port';
 
 export const createMemoryEntryPort = (): EntryPort => {
   let current: EntryConfig | null = null;
+  let watchCalls = 0;
   return {
     async acceptEntryConfig(request: AcceptEntryConfigRequest): Promise<AcceptEntryConfigResponse> {
       if (!isDifficulty(request.difficulty)) {
@@ -68,6 +70,28 @@ export const createMemoryEntryPort = (): EntryPort => {
           scores: emptyBaguaScores(),
         },
       };
+    },
+    async watchCoachTurn(): Promise<WatchCoachTurnResponse> {
+      watchCalls += 1;
+      if (watchCalls >= 2 && current) {
+        return {
+          ok: true,
+          status: 'updated',
+          snapshot: {
+            phase: 'in_progress',
+            sessionId: 'memory-session',
+            topic: current.topic,
+            difficulty: current.difficulty,
+            questionBrief: `${current.topic} · 下一问摘要`,
+            keyPoints: ['追问要点一', '追问要点二'],
+            scores: emptyBaguaScores(),
+          },
+        };
+      }
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20);
+      });
+      return { ok: true, status: 'unchanged' };
     },
   };
 };

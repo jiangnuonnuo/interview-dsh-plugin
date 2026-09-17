@@ -5,7 +5,10 @@ import {
   type BriefCoachRequest,
   type BriefCoachResponse,
   type Difficulty,
+  type InProgressSnapshot,
+  type InterviewSessionErrorCode,
 } from 'interview-dsh-shared';
+import type { ExamSessionStore } from '../data/exam-session-store.js';
 
 export interface CoachBriefInput {
   readonly topic: string;
@@ -22,6 +25,17 @@ export interface ParsedCoachBrief {
   readonly questionBrief: string;
   readonly keyPoints: readonly string[];
 }
+
+export type CoachQuestionFailure = {
+  readonly ok: false;
+  readonly code: Extract<InterviewSessionErrorCode, 'inject_unavailable' | 'first_question_failed' | 'follow_up_failed'>;
+  readonly message: string;
+};
+
+export type AwaitNewQuestionResult =
+  | { readonly ok: true; readonly status: 'ready'; readonly text: string }
+  | { readonly ok: true; readonly status: 'unchanged' }
+  | CoachQuestionFailure;
 
 /**
  * Panel-only coach brief. Must not be mounted on session A.
@@ -44,7 +58,7 @@ export const assembleCoachBriefPrompt = ({
     user: [
       `主题：${topic}`,
       `难度：${difficultyLabel}`,
-      '面试官第一问：',
+      '面试官当前问题：',
       questionText,
     ].join('\n'),
   };
@@ -91,17 +105,20 @@ export const parseCoachBriefOutput = (raw: string): ParsedCoachBrief | null => {
   }
 };
 
+export interface AwaitNewQuestionOptions {
+  readonly timeoutMs?: number;
+  readonly pollMs?: number;
+}
+
 export interface CoachRuntime {
-  readFirstQuestion(
+  readLatestQuestion(
     sessionId: string,
-  ): Promise<
-    | { ok: true; text: string }
-    | {
-        ok: false;
-        code: 'inject_unavailable' | 'first_question_failed';
-        message: string;
-      }
-  >;
+  ): Promise<{ ok: true; text: string } | CoachQuestionFailure>;
+  awaitNewQuestion(
+    sessionId: string,
+    baselineText: string,
+    options?: AwaitNewQuestionOptions,
+  ): Promise<AwaitNewQuestionResult>;
   complete(system: string, user: string): Promise<string | null>;
 }
 
@@ -111,11 +128,25 @@ const coachUnavailable = (): BriefCoachResponse => ({
   message: INTERVIEW_SESSION_ERROR_MESSAGES.coach_unavailable,
 });
 
+const buildSnapshot = (
+  request: BriefCoachRequest,
+  parsed: ParsedCoachBrief,
+): InProgressSnapshot => ({
+  phase: 'in_progress',
+  sessionId: request.sessionId,
+  topic: request.topic,
+  difficulty: request.difficulty,
+  questionBrief: parsed.questionBrief,
+  keyPoints: parsed.keyPoints,
+  scores: emptyBaguaScores(),
+});
+
 export const briefCoachSession = async (
   runtime: CoachRuntime,
   request: BriefCoachRequest,
+  examSessions?: ExamSessionStore,
 ): Promise<BriefCoachResponse> => {
-  const question = await runtime.readFirstQuestion(request.sessionId);
+  const question = await runtime.readLatestQuestion(request.sessionId);
   if (!question.ok) {
     return question;
   }
@@ -135,16 +166,14 @@ export const briefCoachSession = async (
     return coachUnavailable();
   }
 
-  return {
-    ok: true,
-    snapshot: {
-      phase: 'in_progress',
-      sessionId: request.sessionId,
-      topic: request.topic,
-      difficulty: request.difficulty,
-      questionBrief: parsed.questionBrief,
-      keyPoints: parsed.keyPoints,
-      scores: emptyBaguaScores(),
-    },
-  };
+  const snapshot = buildSnapshot(request, parsed);
+  examSessions?.save({
+    sessionId: request.sessionId,
+    topic: request.topic,
+    difficulty: request.difficulty,
+    lastQuestionText: question.text,
+    snapshot,
+  });
+
+  return { ok: true, snapshot };
 };

@@ -28,6 +28,8 @@ describe('assembleCoachBriefPrompt', () => {
     expect(user).toContain(topic);
     expect(user).toContain('中级');
     expect(user).toContain(questionText);
+    expect(user).toContain('面试官当前问题：');
+    expect(user).not.toContain('面试官第一问：');
   });
 
   it('does not include the interviewer role template', () => {
@@ -66,7 +68,8 @@ describe('briefCoachSession', () => {
 
     const result = await briefCoachSession(
       {
-        readFirstQuestion: async () => ({ ok: true, text: questionText }),
+        readLatestQuestion: async () => ({ ok: true, text: questionText }),
+        awaitNewQuestion: async () => ({ ok: true as const, status: 'unchanged' as const }),
         complete,
       },
       { sessionId: 'session-exam', topic, difficulty },
@@ -79,5 +82,22 @@ describe('briefCoachSession', () => {
     }
     expect(complete).toHaveBeenCalledTimes(1);
     expect(installPersona).not.toHaveBeenCalled();
+  });
+
+  it('writes the exam session fingerprint after a successful brief', async () => {
+    const { createExamSessionStore } = await import('../src/data/exam-session-store.js');
+    const examSessions = createExamSessionStore();
+    const result = await briefCoachSession(
+      {
+        readLatestQuestion: async () => ({ ok: true, text: questionText }),
+        awaitNewQuestion: async () => ({ ok: true as const, status: 'unchanged' as const }),
+        complete: async () => '{"questionBrief":"聚簇 vs 二级索引","keyPoints":["回表"]}',
+      },
+      { sessionId: 'session-exam', topic, difficulty },
+      examSessions,
+    );
+    expect(result.ok).toBe(true);
+    expect(examSessions.load('session-exam')?.lastQuestionText).toBe(questionText);
+    expect(examSessions.load('session-exam')?.snapshot.questionBrief).toBe('聚簇 vs 二级索引');
   });
 });

@@ -34,6 +34,7 @@ describe('createInterviewPort', () => {
       getEntryConfig: jest.fn(),
       attachInterviewer: jest.fn(async () => ({ ok: true as const })),
       briefCoach: jest.fn(async () => ({ ok: true as const, snapshot })),
+      watchCoachTurn: jest.fn(),
     };
     const port = createInterviewPort(remote, () => sessions);
 

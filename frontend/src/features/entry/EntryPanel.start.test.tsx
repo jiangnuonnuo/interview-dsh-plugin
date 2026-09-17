@@ -8,6 +8,7 @@ import {
 import { EntryPanel } from './EntryPanel';
 import { createMemoryEntryPort } from './memory-port';
 import type { EntryPort } from './entry-port';
+import { examPanelState } from './exam-panel-state';
 
 const failingStartPort = (response: StartInterviewResponse): EntryPort => ({
   ...createMemoryEntryPort(),
@@ -17,6 +18,9 @@ const failingStartPort = (response: StartInterviewResponse): EntryPort => ({
 });
 
 describe('EntryPanel start', () => {
+  afterEach(() => {
+    examPanelState.set(null);
+  });
   it('enters 进行中 without rendering bubbles on success', async () => {
     render(<EntryPanel port={createMemoryEntryPort()} />);
     fireEvent.click(screen.getByRole('button', { name: /MySQL 索引与优化/ }));

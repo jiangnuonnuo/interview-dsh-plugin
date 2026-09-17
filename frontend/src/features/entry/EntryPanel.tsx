@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactElement } from 'react';
 import {
   CUSTOM_TOPIC_ID,
   DEFAULT_DIFFICULTY,
@@ -7,9 +7,9 @@ import {
   PRESET_TOPICS,
   TOPIC_CATEGORIES,
   type Difficulty,
-  type InProgressSnapshot,
 } from 'interview-dsh-shared';
 import type { EntryPort } from './entry-port';
+import { examPanelState } from './exam-panel-state';
 import { InProgressPanel } from '../session/InProgressPanel';
 import styles from './EntryPanel.module.css';
 
@@ -87,6 +87,7 @@ const TOPIC_ICONS: Record<string, { background: string; svg: ReactElement }> = {
 export interface EntryPanelProps {
   port: EntryPort;
   onClose?: () => void;
+  onExamLive?: () => void;
 }
 
 const PanelHead = ({ onClose }: { onClose?: () => void }) => (
@@ -111,14 +112,19 @@ const PanelHead = ({ onClose }: { onClose?: () => void }) => (
   </header>
 );
 
-export const EntryPanel = ({ port, onClose }: EntryPanelProps) => {
+export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<(typeof TOPIC_CATEGORIES)[number]>(TOPIC_CATEGORIES[0]);
   const [topicId, setTopicId] = useState<string | null>(null);
   const [customTopic, setCustomTopic] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty>(DEFAULT_DIFFICULTY);
   const [error, setError] = useState<string | null>(null);
-  const [snapshot, setSnapshot] = useState<InProgressSnapshot | null>(null);
+  const snapshot = useSyncExternalStore(
+    examPanelState.subscribe,
+    examPanelState.get,
+    examPanelState.get,
+  );
+  const [watchError, setWatchError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -145,6 +151,57 @@ export const EntryPanel = ({ port, onClose }: EntryPanelProps) => {
     };
   }, [port]);
 
+  useEffect(() => {
+    if (snapshot === null) {
+      return;
+    }
+    onExamLive?.();
+  }, [onExamLive, snapshot?.sessionId]);
+
+  useEffect(() => {
+    if (snapshot === null) {
+      return;
+    }
+    const sessionId = snapshot.sessionId;
+    let cancelled = false;
+    const run = async () => {
+      while (!cancelled) {
+        try {
+          const result = await port.watchCoachTurn({ sessionId });
+          if (cancelled) {
+            return;
+          }
+          if (!result.ok) {
+            setWatchError(result.message);
+            await new Promise((resolve) => {
+              setTimeout(resolve, 1000);
+            });
+            if (cancelled) {
+              return;
+            }
+            continue;
+          }
+          if (result.status === 'updated') {
+            setWatchError(null);
+            examPanelState.set(result.snapshot);
+          }
+        } catch (cause: unknown) {
+          if (cancelled) {
+            return;
+          }
+          setWatchError(cause instanceof Error ? cause.message : String(cause));
+          await new Promise((resolve) => {
+            setTimeout(resolve, 1000);
+          });
+        }
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [port, snapshot?.sessionId]);
+
   const visiblePresets = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) {
@@ -164,10 +221,11 @@ export const EntryPanel = ({ port, onClose }: EntryPanelProps) => {
       });
       if (!result.ok) {
         setError(result.message);
-        setSnapshot(null);
+        examPanelState.set(null);
         return;
       }
-      setSnapshot(result.snapshot);
+      setWatchError(null);
+      examPanelState.set(result.snapshot);
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -176,7 +234,7 @@ export const EntryPanel = ({ port, onClose }: EntryPanelProps) => {
   };
 
   if (snapshot) {
-    return <InProgressPanel snapshot={snapshot} onClose={onClose} />;
+    return <InProgressPanel snapshot={snapshot} error={watchError} onClose={onClose} />;
   }
 
   return (

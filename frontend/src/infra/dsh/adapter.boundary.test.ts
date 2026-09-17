@@ -83,6 +83,10 @@ describe('frontend DSH adapter boundary', () => {
     expect(source).not.toMatch(/fetch\(['"`]\/api\//);
     expect(source).toMatch(/readService\(ctx, 'sessions'\)/);
     expect(source).toMatch(/inject\(\['sessions'\]/);
+    expect(source).toMatch(/inject\(\['layout'\]/);
     expect(source).not.toMatch(/inject = \['slots', 'remote', 'sessions'\]/);
+    expect(source).toMatch(/export const inject = \['slots', 'remote'\]/);
+    expect(source).not.toMatch(/inject\(['"]details['"]/);
+    expect(source).not.toMatch(/name: ['"]details['"]/);
   });
 });

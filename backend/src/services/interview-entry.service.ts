@@ -13,10 +13,14 @@ import {
   type EntryConfig,
   type EntryErrorCode,
   type GetEntryConfigResponse,
+  type WatchCoachTurnRequest,
+  type WatchCoachTurnResponse,
 } from 'interview-dsh-shared';
 import type { EntryConfigStore } from '../data/entry-config-store.js';
+import { createExamSessionStore, type ExamSessionStore } from '../data/exam-session-store.js';
 import { briefCoachSession, type CoachRuntime } from './coach-brief.js';
 import { assembleInterviewerPersona } from './interviewer-persona.js';
+import { watchCoachTurnSession } from './watch-coach-turn.js';
 
 export interface InterviewerPersonaInstaller {
   install(sessionId: string, text: string): AttachInterviewerResponse;
@@ -27,6 +31,7 @@ export interface InterviewEntryService {
   getEntryConfig(): GetEntryConfigResponse;
   attachInterviewer(request: AttachInterviewerRequest): AttachInterviewerResponse;
   briefCoach(request: BriefCoachRequest): Promise<BriefCoachResponse>;
+  watchCoachTurn(request: WatchCoachTurnRequest): Promise<WatchCoachTurnResponse>;
 }
 
 const failure = (code: EntryErrorCode): AcceptEntryConfigResponse => ({
@@ -44,10 +49,15 @@ const unavailablePersona: InterviewerPersonaInstaller = {
 };
 
 const unavailableCoach: CoachRuntime = {
-  readFirstQuestion: async () => ({
+  readLatestQuestion: async () => ({
     ok: false,
     code: 'first_question_failed',
     message: INTERVIEW_SESSION_ERROR_MESSAGES.first_question_failed,
+  }),
+  awaitNewQuestion: async () => ({
+    ok: false,
+    code: 'follow_up_failed',
+    message: INTERVIEW_SESSION_ERROR_MESSAGES.follow_up_failed,
   }),
   complete: async () => null,
 };
@@ -56,6 +66,7 @@ export const createInterviewEntryService = (
   store: EntryConfigStore,
   persona: InterviewerPersonaInstaller = unavailablePersona,
   coach: CoachRuntime = unavailableCoach,
+  examSessions: ExamSessionStore = createExamSessionStore(),
 ): InterviewEntryService => ({
   acceptEntryConfig(request) {
     if (!isDifficulty(request.difficulty)) {
@@ -106,6 +117,9 @@ export const createInterviewEntryService = (
     return persona.install(request.sessionId, text);
   },
   briefCoach(request) {
-    return briefCoachSession(coach, request);
+    return briefCoachSession(coach, request, examSessions);
+  },
+  watchCoachTurn(request) {
+    return watchCoachTurnSession(coach, examSessions, request);
   },
 });

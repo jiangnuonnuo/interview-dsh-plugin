@@ -6,10 +6,11 @@ import styles from './InProgressPanel.module.css';
 
 export interface InProgressPanelProps {
   snapshot: InProgressSnapshot;
+  error?: string | null;
   onClose?: () => void;
 }
 
-export const InProgressPanel = ({ snapshot, onClose }: InProgressPanelProps) => {
+export const InProgressPanel = ({ snapshot, error, onClose }: InProgressPanelProps) => {
   return (
     <aside className={styles.panel} aria-label="模拟面试进行中">
       <header className={styles.head}>
@@ -28,6 +29,11 @@ export const InProgressPanel = ({ snapshot, onClose }: InProgressPanelProps) => 
           <p className={styles.status}>进行中</p>
           <p className={styles.meta}>主题：{snapshot.topic}</p>
           <p className={styles.meta}>难度：{DIFFICULTY_LABELS[snapshot.difficulty]}</p>
+          {error ? (
+            <p className={styles.error} role="alert">
+              {error}
+            </p>
+          ) : null}
         </section>
         <section>
           <h2 className={styles.block}>本题题干</h2>

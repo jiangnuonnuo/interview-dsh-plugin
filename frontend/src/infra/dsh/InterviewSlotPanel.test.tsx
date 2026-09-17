@@ -1,6 +1,8 @@
 import { act, createElement, type ComponentType } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { createMemoryEntryPort } from '../../features/entry/memory-port';
+import { examPanelState } from '../../features/entry/exam-panel-state';
+import { emptyBaguaScores, type InProgressSnapshot } from 'interview-dsh-shared';
 import { entrySurface } from './entry-surface';
 import { apply, openInterviewTab, type ClientContext } from './index';
 import { InterviewSlotPanel } from './InterviewSlotPanel';
@@ -16,9 +18,20 @@ const baseCtx = (): ClientContext => ({
   inject: () => undefined,
 });
 
+const examSnapshot: InProgressSnapshot = {
+  phase: 'in_progress',
+  sessionId: 'session-exam',
+  topic: 'MySQL 索引与优化',
+  difficulty: 'mid',
+  questionBrief: '聚簇索引',
+  keyPoints: ['叶子存行'],
+  scores: emptyBaguaScores(),
+};
+
 describe('entrySurface', () => {
   afterEach(() => {
     entrySurface.close();
+    examPanelState.set(null);
   });
 
   it('starts closed and toggles', () => {
@@ -33,6 +46,7 @@ describe('entrySurface', () => {
 describe('openInterviewTab', () => {
   afterEach(() => {
     entrySurface.close();
+    examPanelState.set(null);
   });
 
   it('falls back to the slot overlay when official tabs were not registered', () => {
@@ -67,6 +81,78 @@ describe('openInterviewTab', () => {
     });
     expect(entrySurface.isOpen()).toBe(true);
   });
+
+  it('opens details via nested layout inject when ctx.get has no layout', () => {
+    const calls: string[] = [];
+    openInterviewTab({
+      ...baseCtx(),
+      get: () => undefined,
+      inject: (services, callback) => {
+        if (!services.includes('layout')) {
+          return undefined;
+        }
+        return callback({
+          ...baseCtx(),
+          get: (key) =>
+            key === 'layout'
+              ? {
+                  openDetails: () => calls.push('open'),
+                  closeDetails: () => calls.push('close'),
+                }
+              : undefined,
+        });
+      },
+    });
+    expect(entrySurface.isOpen()).toBe(true);
+    expect(calls).toEqual(['open']);
+  });
+
+  it('opens the official details column when falling back to overlay', () => {
+    const calls: string[] = [];
+    openInterviewTab({
+      ...baseCtx(),
+      get: (key) =>
+        key === 'layout'
+          ? {
+              openDetails: () => calls.push('open'),
+              closeDetails: () => calls.push('close'),
+            }
+          : undefined,
+    });
+    expect(entrySurface.isOpen()).toBe(true);
+    expect(calls).toEqual(['open']);
+    openInterviewTab({
+      ...baseCtx(),
+      get: (key) =>
+        key === 'layout'
+          ? {
+              openDetails: () => calls.push('open'),
+              closeDetails: () => calls.push('close'),
+            }
+          : undefined,
+    });
+    expect(entrySurface.isOpen()).toBe(false);
+    expect(calls).toEqual(['open', 'close']);
+  });
+
+  it('pins the exam session when the overlay closes', () => {
+    const opened: string[] = [];
+    examPanelState.set(examSnapshot);
+    entrySurface.open();
+    openInterviewTab({
+      ...baseCtx(),
+      get: (key) =>
+        key === 'sessions'
+          ? {
+              create: async () => 'ignored',
+              binding: () => undefined,
+              open: (id: string) => opened.push(id),
+            }
+          : undefined,
+    });
+    expect(entrySurface.isOpen()).toBe(false);
+    expect(opened).toEqual(['session-exam']);
+  });
 });
 
 describe('apply', () => {
@@ -74,6 +160,7 @@ describe('apply', () => {
     act(() => {
       entrySurface.close();
     });
+    examPanelState.set(null);
   });
 
   it('still registers the input trigger when sidebarRightTabs inject is unavailable', async () => {
@@ -177,6 +264,7 @@ describe('InterviewSlotPanel', () => {
     act(() => {
       entrySurface.close();
     });
+    examPanelState.set(null);
   });
 
   it('renders nothing while closed', () => {

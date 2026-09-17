@@ -37,13 +37,20 @@ const attachRequestSchema = z.object({
   difficulty: difficultySchema,
 });
 
+const sessionErrorSchema = z.enum([
+  'inject_unavailable',
+  'coach_unavailable',
+  'first_question_failed',
+  'follow_up_failed',
+]);
+
 const attachResultSchema = z.union([
   z.object({
     ok: z.literal(true),
   }),
   z.object({
     ok: z.literal(false),
-    code: z.enum(['inject_unavailable', 'coach_unavailable', 'first_question_failed']),
+    code: sessionErrorSchema,
     message: z.string(),
   }),
 ]);
@@ -76,7 +83,28 @@ const briefResultSchema = z.union([
   }),
   z.object({
     ok: z.literal(false),
-    code: z.enum(['inject_unavailable', 'coach_unavailable', 'first_question_failed']),
+    code: sessionErrorSchema,
+    message: z.string(),
+  }),
+]);
+
+const watchRequestSchema = z.object({
+  sessionId: z.string(),
+});
+
+const watchResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    status: z.literal('updated'),
+    snapshot: snapshotSchema,
+  }),
+  z.object({
+    ok: z.literal(true),
+    status: z.literal('unchanged'),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: sessionErrorSchema,
     message: z.string(),
   }),
 ]);
@@ -115,6 +143,16 @@ const _briefResult$codec = {
   mode: 'strict' as const,
   typeSymbol: 'interview-dsh#BriefCoachResponse',
   schema: briefResultSchema,
+};
+const _watchRequest$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#WatchCoachTurnRequest',
+  schema: watchRequestSchema,
+};
+const _watchResult$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#WatchCoachTurnResponse',
+  schema: watchResultSchema,
 };
 
 export const TYPERT = {
@@ -164,6 +202,17 @@ export const TYPERT = {
       ],
       result: _briefResult$codec,
     },
+    {
+      id: 'interview-dsh#interviewEntry/watchCoachTurn',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'watchCoachTurn',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        { name: 'request', wire: 'request', source: 'json' as const, codec: _watchRequest$codec },
+      ],
+      result: _watchResult$codec,
+    },
   ],
   model: {
     services: [
@@ -171,7 +220,7 @@ export const TYPERT = {
         description: 'interview-dsh 入口配置服务，校验并保存主题与难度。',
         summary: '八股专项入口配置服务。',
         tags: [],
-        jsDoc: '/** 入口配置：acceptEntryConfig / getEntryConfig / attachInterviewer / briefCoach */',
+        jsDoc: '/** 入口配置：acceptEntryConfig / getEntryConfig / attachInterviewer / briefCoach / watchCoachTurn */',
         key: 'interviewEntry',
         exportName: 'InterviewEntryService',
         members: [
@@ -202,6 +251,13 @@ export const TYPERT = {
             signature: 'briefCoach(request: BriefCoachRequest): Promise<BriefCoachResponse>',
             summary: '根据第一问题干生成本题要点快照。',
             jsDoc: '/** 同模型静默补全，只写进行中快照。 */',
+          },
+          {
+            kind: 'method',
+            name: 'watchCoachTurn',
+            signature: 'watchCoachTurn(request: WatchCoachTurnRequest): Promise<WatchCoachTurnResponse>',
+            summary: '看守考场下一问并刷新面板要点。',
+            jsDoc: '/** 题干变化后静默补全；不向对话 prompt。 */',
           },
         ],
         types: [],

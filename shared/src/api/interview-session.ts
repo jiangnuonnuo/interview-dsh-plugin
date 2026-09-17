@@ -3,12 +3,14 @@ import { DIFFICULTY_LABELS, type Difficulty, type EntryErrorCode } from './inter
 export type InterviewSessionErrorCode =
   | 'inject_unavailable'
   | 'coach_unavailable'
-  | 'first_question_failed';
+  | 'first_question_failed'
+  | 'follow_up_failed';
 
 export const INTERVIEW_SESSION_ERROR_MESSAGES: Record<InterviewSessionErrorCode, string> = {
   inject_unavailable: '无法在新对话上挂载面试官人设：当前 Host 没有可寻址的 Agent。',
   coach_unavailable: '无法生成本题要点：当前 Host 没有可用的同模型补全。',
   first_question_failed: '面试官开口失败。',
+  follow_up_failed: '无法看守下一问：本场记录不存在，或当前 Host 读不到最新题干。',
 };
 
 export const INTERVIEW_OPENING_PROMPT =
@@ -76,5 +78,14 @@ export type StartExamRoomResponse =
 export type StartInterviewResponse =
   | { readonly ok: true; readonly snapshot: InProgressSnapshot }
   | { readonly ok: false; readonly code: EntryErrorCode | InterviewSessionErrorCode; readonly message: string };
+
+export interface WatchCoachTurnRequest {
+  readonly sessionId: string;
+}
+
+export type WatchCoachTurnResponse =
+  | { readonly ok: true; readonly status: 'updated'; readonly snapshot: InProgressSnapshot }
+  | { readonly ok: true; readonly status: 'unchanged' }
+  | { readonly ok: false; readonly code: InterviewSessionErrorCode; readonly message: string };
 
 export { DIFFICULTY_LABELS };

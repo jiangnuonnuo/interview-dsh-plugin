@@ -95,3 +95,12 @@
   padding: 6px 0;
   border-bottom: 1px solid #e6ebf4;
 }
+
+.error {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff1f2;
+  color: #be123c;
+  font-size: 12px;
+}

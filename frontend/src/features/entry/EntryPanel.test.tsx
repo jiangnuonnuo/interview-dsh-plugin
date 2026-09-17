@@ -2,8 +2,12 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { CUSTOM_TOPIC_ID } from 'interview-dsh-shared';
 import { EntryPanel } from './EntryPanel';
 import { createMemoryEntryPort } from './memory-port';
+import { examPanelState } from './exam-panel-state';
 
 describe('EntryPanel', () => {
+  afterEach(() => {
+    examPanelState.set(null);
+  });
   it('defaults difficulty to 中级', () => {
     render(<EntryPanel port={createMemoryEntryPort()} />);
     expect(screen.getByRole('radio', { name: '中级' }).getAttribute('aria-checked')).toBe('true');

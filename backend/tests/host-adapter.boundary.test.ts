@@ -52,6 +52,7 @@ describe('backend DSH adapter boundary', () => {
       .join('\n');
     expect(source).not.toMatch(/session\.append\(/);
     expect(source).not.toMatch(/appendMessage/);
+    expect(source).not.toMatch(/session\.prompt\(/);
   });
 
   it('does not mention the retired interviewer identifier in src', () => {

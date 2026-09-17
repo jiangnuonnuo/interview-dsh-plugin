@@ -10,7 +10,13 @@ import styles from './InterviewSlotPanel.module.css';
 
 export const ENTRY_OVERLAY_ID = 'interview-dsh/entry-overlay';
 
-export const InterviewSlotPanel = ({ port }: { port: EntryPort }) => {
+export interface InterviewSlotPanelProps {
+  port: EntryPort;
+  onClose?: () => void;
+  onExamLive?: () => void;
+}
+
+export const InterviewSlotPanel = ({ port, onClose, onExamLive }: InterviewSlotPanelProps) => {
   const open = useSyncExternalStore(
     entrySurface.subscribe,
     getEntrySurfaceSnapshot,
@@ -27,7 +33,7 @@ export const InterviewSlotPanel = ({ port }: { port: EntryPort }) => {
       {
         className: styles.backdrop,
         'data-interview-entry-overlay': 'error',
-        onClick: () => entrySurface.close(),
+        onClick: () => (onClose !== undefined ? onClose() : entrySurface.close()),
       },
       createElement(
         'div',
@@ -49,7 +55,7 @@ export const InterviewSlotPanel = ({ port }: { port: EntryPort }) => {
           { className: styles.actions },
           createElement(
             'button',
-            { type: 'button', className: styles.ack, onClick: () => entrySurface.close() },
+            { type: 'button', className: styles.ack, onClick: () => (onClose !== undefined ? onClose() : entrySurface.close()) },
             '知道了',
           ),
         ),
@@ -69,7 +75,7 @@ export const InterviewSlotPanel = ({ port }: { port: EntryPort }) => {
     createElement(
       'div',
       { className: styles.body },
-      createElement(EntryPanel, { port, onClose: () => entrySurface.close() }),
+      createElement(EntryPanel, { port, onClose: onClose ?? (() => entrySurface.close()), onExamLive }),
     ),
   );
 };
