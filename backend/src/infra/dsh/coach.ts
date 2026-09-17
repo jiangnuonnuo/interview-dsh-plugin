@@ -5,6 +5,7 @@ import type {
   CoachQuestionFailure,
   CoachRuntime,
 } from '../../services/coach-brief.js';
+import { extractPendingQuestion } from '../../services/pending-question.js';
 
 const PLUGIN_ID = 'interview-dsh';
 const FIRST_QUESTION_TIMEOUT_MS = 90_000;
@@ -139,7 +140,7 @@ const chunkDelta = (item: unknown): string => {
 };
 
 /**
- * 面板要对齐对话里「当前这一问」：最后一条人类用户之后的面试官可见文本。
+ * 面板要对齐「当前待答问」：最后一条人类用户之后的面试官可见文本，再抽出问句。
  * 宿主气泡来自 append-only events（含 text-delta）；deriveMessages 是模型面，可能还停在上一问。
  */
 const currentQuestionText = (items: readonly unknown[]): string => {
@@ -161,7 +162,8 @@ const currentQuestionText = (items: readonly unknown[]): string => {
     }
     streamed += chunkDelta(item);
   }
-  return committed.length > 0 ? committed : streamed.trim();
+  const raw = committed.length > 0 ? committed : streamed.trim();
+  return extractPendingQuestion(raw);
 };
 
 const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>

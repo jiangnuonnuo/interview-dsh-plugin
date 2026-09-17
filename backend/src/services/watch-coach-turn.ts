@@ -41,6 +41,69 @@ export const watchCoachTurnSession = async (
     return followUpFailed();
   }
 
+  const pollMs = clock.pollMs ?? 300;
+  const briefPendingQuestion = async (questionText: string): Promise<WatchCoachTurnResponse> => {
+    let pendingText = questionText;
+    let parsed: ReturnType<typeof parseCoachBriefOutput> = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { system, user } = assembleCoachBriefPrompt({
+        topic: record.topic,
+        difficulty: record.difficulty,
+        questionText: pendingText,
+      });
+      const raw = await runtime.complete(system, user);
+      if (raw === null) {
+        return coachUnavailable();
+      }
+      parsed = parseCoachBriefOutput(raw);
+      if (parsed === null) {
+        return coachUnavailable();
+      }
+
+      if (attempt < 2) {
+        const caught = await runtime.awaitNewQuestion(request.sessionId, pendingText, {
+          timeoutMs: pollMs,
+          pollMs,
+        });
+        if (caught.ok && caught.status === 'ready' && caught.text !== pendingText) {
+          pendingText = caught.text;
+          continue;
+        }
+      }
+      break;
+    }
+    if (parsed === null) {
+      return coachUnavailable();
+    }
+
+    const snapshot = {
+      phase: 'in_progress' as const,
+      sessionId: record.sessionId,
+      topic: record.topic,
+      difficulty: record.difficulty,
+      questionBrief: parsed.questionBrief,
+      keyPoints: parsed.keyPoints,
+      scores: emptyBaguaScores(),
+    };
+    examSessions.save({
+      sessionId: record.sessionId,
+      topic: record.topic,
+      difficulty: record.difficulty,
+      lastQuestionText: pendingText,
+      snapshot,
+    });
+
+    return { ok: true, status: 'updated', snapshot };
+  };
+
+  if (request.force === true) {
+    const latest = await runtime.readLatestQuestion(request.sessionId);
+    if (!latest.ok) {
+      return latest;
+    }
+    return briefPendingQuestion(latest.text);
+  }
+
   const waited = await runtime.awaitNewQuestion(request.sessionId, record.lastQuestionText, {
     timeoutMs: clock.timeoutMs ?? WATCH_COACH_TURN_TIMEOUT_MS,
     pollMs: clock.pollMs,
@@ -51,57 +114,5 @@ export const watchCoachTurnSession = async (
   if (waited.status === 'unchanged') {
     return { ok: true, status: 'unchanged' };
   }
-
-  const pollMs = clock.pollMs ?? 300;
-  let questionText = waited.text;
-  let parsed: ReturnType<typeof parseCoachBriefOutput> = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const { system, user } = assembleCoachBriefPrompt({
-      topic: record.topic,
-      difficulty: record.difficulty,
-      questionText,
-    });
-    const raw = await runtime.complete(system, user);
-    if (raw === null) {
-      return coachUnavailable();
-    }
-    parsed = parseCoachBriefOutput(raw);
-    if (parsed === null) {
-      return coachUnavailable();
-    }
-
-    if (attempt < 2) {
-      const caught = await runtime.awaitNewQuestion(request.sessionId, questionText, {
-        timeoutMs: pollMs,
-        pollMs,
-      });
-      if (caught.ok && caught.status === 'ready' && caught.text !== questionText) {
-        questionText = caught.text;
-        continue;
-      }
-    }
-    break;
-  }
-  if (parsed === null) {
-    return coachUnavailable();
-  }
-
-  const snapshot = {
-    phase: 'in_progress' as const,
-    sessionId: record.sessionId,
-    topic: record.topic,
-    difficulty: record.difficulty,
-    questionBrief: parsed.questionBrief,
-    keyPoints: parsed.keyPoints,
-    scores: emptyBaguaScores(),
-  };
-  examSessions.save({
-    sessionId: record.sessionId,
-    topic: record.topic,
-    difficulty: record.difficulty,
-    lastQuestionText: questionText,
-    snapshot,
-  });
-
-  return { ok: true, status: 'updated', snapshot };
+  return briefPendingQuestion(waited.text);
 };

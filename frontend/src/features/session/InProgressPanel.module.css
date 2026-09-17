@@ -72,6 +72,36 @@
   font-weight: 650;
 }
 
+.blockHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.blockHead .block {
+  margin: 0;
+}
+
+.refresh {
+  flex: 0 0 auto;
+  border: 1px solid #d7deea;
+  background: #ffffff;
+  color: #3d4663;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+
+.refresh:disabled {
+  cursor: default;
+  color: #98a0b0;
+}
+
 .brief {
   margin: 0;
   font-size: 13px;
@@ -103,4 +133,17 @@
   background: #fff1f2;
   color: #be123c;
   font-size: 12px;
+}
+
+.end {
+  margin-top: 12px;
+  border: 1px solid #d7deea;
+  background: #ffffff;
+  color: #3d4663;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 10px;
+  border-radius: 6px;
 }

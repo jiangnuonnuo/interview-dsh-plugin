@@ -81,6 +81,7 @@ export type StartInterviewResponse =
 
 export interface WatchCoachTurnRequest {
   readonly sessionId: string;
+  readonly force?: boolean;
 }
 
 export type WatchCoachTurnResponse =

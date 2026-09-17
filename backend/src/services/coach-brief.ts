@@ -9,6 +9,7 @@ import {
   type InterviewSessionErrorCode,
 } from 'interview-dsh-shared';
 import type { ExamSessionStore } from '../data/exam-session-store.js';
+import { extractPendingQuestion } from './pending-question.js';
 
 export interface CoachBriefInput {
   readonly topic: string;
@@ -46,11 +47,13 @@ export const assembleCoachBriefPrompt = ({
   questionText,
 }: CoachBriefInput): CoachBriefParts => {
   const difficultyLabel = DIFFICULTY_LABELS[difficulty];
+  const pendingQuestion = extractPendingQuestion(questionText);
   return {
     system: [
       '你是本场模拟面试的面板教练，只为右侧面板产出对照材料。',
       '不要扮演面试官，不要向候选人发问，不要输出分数或通过/不通过判定。',
-      '根据本场主题、难度和面试官已经问出的题目，只返回一个 JSON 对象：',
+      '只针对当前待答问写摘要和要点；忽略同一段里对上一问的点评、纠正或揭晓。',
+      '根据本场主题、难度和面试官已经问出的待答问，只返回一个 JSON 对象：',
       '{"questionBrief":"题干摘要","keyPoints":["标准答要点1","标准答要点2"]}',
       'questionBrief 是本题题干的短摘要；keyPoints 是本题标准答要点，3 到 6 条。',
       '不要使用 Markdown 代码围栏，不要附加解释。',
@@ -59,7 +62,7 @@ export const assembleCoachBriefPrompt = ({
       `主题：${topic}`,
       `难度：${difficultyLabel}`,
       '面试官当前问题：',
-      questionText,
+      pendingQuestion,
     ].join('\n'),
   };
 };

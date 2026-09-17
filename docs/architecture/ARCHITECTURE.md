@@ -94,8 +94,8 @@ frontend/infra/dsh            backend/infra/dsh
 - Host `apply` 声明 `inject: ['agents', 'llm', 'agentDefaultModel']`，以便在新会话的 Agent 上挂 `systemPrompt.section`，并用当前默认模型做教练静默补全。
 - 当前 `apply` 的 `provide('interviewEntry')` 提供配置校验、`attachInterviewer`、`briefCoach` 与 `watchCoachTurn`。禁止在 Host 注册 Slot、右栏 tab 或输入栏按钮。
 - 开考时 Client 先 `sessions.create()`，再 remote `attachInterviewer`；适配层用 `ctx.agents.get(sessionId)` 拿到刚创建的 Agent，在 **agent.ctx**（不是插件根 ctx）上挂 `deployment:persona`。找不到 Agent 时返回 `inject_unavailable`，禁止用自建聊天绕过。
-- 第一问出现后 Host `briefCoach`：`agent.whenIdle()`，再从会话日志取 **最后一条人类用户之后** 的面试官可见题干（优先 `session.events`，含 `assistant/chunk` 的 `text-delta`；再鸭子类型认 `snapshotEvents()` / `deriveMessages()`。Desktop 0.2.17 bundled `dsh-session` 的人类对话在 events，模型面 `deriveMessages` 可能仍停在上一问），再 `llm.stream` 写进行中快照。教练文本不得 `append` 到对话。读日志抛错映射为 `first_question_failed`，禁止让 Typert 吞成 internal。
-- 后续轮次只看守：Client 循环 `watchCoachTurn`，Host 轮询当前题干；题干相对上一问变化后先 `whenIdle()` 再 brief，避免 Think/半句。教练补全期间若日志已是更新的一问，改 brief 新题。**不得**再 `session.prompt` 催下一问。查不到读日志符号时标 `TODO` 并返回 `follow_up_failed`。
+- 第一问出现后 Host `briefCoach`：`agent.whenIdle()`，再从会话日志取 **最后一条人类用户之后** 的面试官可见文本（优先 `session.events`，含 `assistant/chunk` 的 `text-delta`；再鸭子类型认 `snapshotEvents()` / `deriveMessages()`。Desktop 0.2.17 bundled `dsh-session` 的人类对话在 events，模型面 `deriveMessages` 可能仍停在上一问），抽出 **当前待答问**（有 `【本题】` 则用标记之后；否则先跳过文末无问号议程，再取最后一段连续问句；无问句则整段），再 `llm.stream` 写进行中快照。教练文本不得 `append` 到对话。读日志抛错映射为 `first_question_failed`，禁止让 Typert 吞成 internal。
+- 后续轮次只看守：Client 循环 `watchCoachTurn`（不带 `force`），Host 轮询抽出后的待答问；相对上一问变化后先 `whenIdle()` 再 brief，避免 Think/半句。教练补全期间若日志已是更新的一问，改 brief 新题。`force: true` 时不比较指纹，按当前待答问立刻 brief。**不得**再 `session.prompt` 催下一问。查不到读日志符号时标 `TODO` 并返回 `follow_up_failed`。
 
 ### 4.2 Client 适配层
 
@@ -125,7 +125,7 @@ frontend/infra/dsh            backend/infra/dsh
 
 1. 用嵌套 `ctx.inject(['sidebarRightTabs'], …)` 尝试 `sidebarRightTabs.register({ id: 'interview-dsh/entry', kind: 'interview' })`，正文挂 `sidebar.right.pane.tab`。成功才把 `officialTabRegistered = true`。该路径缺失时不得让整个 Client `apply` 失败。
 2. 点击时：仅当上一步已成功，且 `ctx.get('sidebarRight')` 上确有 `openTab`，才调用 `openTab('interview')`。
-3. 否则 `shell.overlay` 右侧抽屉：内容 `position: fixed`、`z-index` ≥ 1000，宽度对齐官方 details 列（360px）。打开时探测 `layout`（先 `ctx.get('layout')`，再嵌套 `ctx.inject(['layout'])`）并 `openDetails()` 让对话列让出右栏；关闭时 `closeDetails()`，若已有考场 `sessionId` 再 `sessions.open` 钉住该对话。**禁止** `slots.inject('details')`（会盖掉宿主 DetailsPanel）。`layout` / `sessions` 不得写进 Client 顶层 inject。进行中快照存在模块状态里，overlay 卸载后重开仍是进行中；看守只在面板挂载时跑。
+3. 否则 `shell.overlay` 右侧抽屉：内容 `position: fixed`、`z-index` ≥ 1000，宽度对齐官方 details 列（360px）。打开时探测 `layout`（先 `ctx.get('layout')`，再嵌套 `ctx.inject(['layout'])`）并 `openDetails()` 让对话列让出右栏；关闭时只 `closeDetails()`，**不得**再 `sessions.open` 把当前对话拽回考场。考场对话仍留在侧栏；用户可点那条会话继续作答。**禁止** `slots.inject('details')`（会盖掉宿主 DetailsPanel）。`layout` / `sessions` 不得写进 Client 顶层 inject。进行中快照存在模块状态里，overlay 卸载后重开「面试」仍是进行中；看守只在面板挂载时跑。「结束本场」清掉这份快照后才回到入口，才能再 `sessions.create` 开新一轮。
 4. 「关闭」在面板左上角（标题在其右侧）。再次点「面试」或点「关闭」收起。
 5. 打开失败：同一 overlay 展示可见错误，禁止空 catch、禁止点击无反应。
 
@@ -140,9 +140,9 @@ frontend/infra/dsh            backend/infra/dsh
 | A 对话 / 面试官 | 提问、追问、提示、换题、结束语 | 读场前历史；看见评分/标准答提示词；领域层直接调 Host SDK |
 | B 面板 / 教练 | 要点、标准答、评分、简报 | 任何输出进入气泡；读场前历史；前端做评分判定 |
 
-允许：A 的问答作为材料单向交给 B。禁止：B 回流到 A。第一问之后的追问由宿主对话继续；插件只看守最新助手题干并刷新面板，不得再向 A `prompt`。
+允许：A 的问答作为材料单向交给 B。禁止：B 回流到 A。第一问之后的追问由宿主对话继续；插件只看守抽出后的当前待答问并刷新面板，不得再向 A `prompt`。
 
-结束时必须能卸下面试官，当前对话恢复普通助手。适配层查不到注入/卸载 API 时标 `TODO`，禁止用自建聊天绕过。
+结束时必须能卸下面试官，当前对话恢复普通助手。面板「结束本场」只清掉进行中快照并回到入口，不切换宿主当前会话。适配层查不到注入/卸载 API 时标 `TODO`，禁止用自建聊天绕过。
 
 提示词在 `backend/src/services/` 模板化；`infra/dsh/` 只负责交给哪条会话。面试官口径来自 `interviewer-role-prompt.md`，不在适配层手写一套角色。
 

@@ -9,6 +9,7 @@ import {
   type EntryConfig,
   type GetEntryConfigResponse,
   type StartInterviewResponse,
+  type WatchCoachTurnRequest,
   type WatchCoachTurnResponse,
 } from 'interview-dsh-shared';
 import type { EntryPort } from './entry-port';
@@ -71,7 +72,24 @@ export const createMemoryEntryPort = (): EntryPort => {
         },
       };
     },
-    async watchCoachTurn(): Promise<WatchCoachTurnResponse> {
+    async watchCoachTurn(request: WatchCoachTurnRequest): Promise<WatchCoachTurnResponse> {
+      if (request.force === true) {
+        const topic = current?.topic ?? '主题';
+        const difficulty = current?.difficulty ?? 'mid';
+        return {
+          ok: true,
+          status: 'updated',
+          snapshot: {
+            phase: 'in_progress',
+            sessionId: 'memory-session',
+            topic,
+            difficulty,
+            questionBrief: `${topic} · 强制刷新摘要`,
+            keyPoints: ['强制刷新要点'],
+            scores: emptyBaguaScores(),
+          },
+        };
+      }
       watchCalls += 1;
       if (watchCalls >= 2 && current) {
         return {

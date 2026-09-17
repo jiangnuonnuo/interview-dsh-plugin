@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { emptyBaguaScores } from 'interview-dsh-shared';
 import { InProgressPanel } from './InProgressPanel';
 
@@ -27,6 +27,33 @@ describe('InProgressPanel', () => {
     expect(screen.queryByText('跳过问题')).toBeNull();
     expect(screen.queryByText(/30\s*分钟/)).toBeNull();
     expect(screen.queryByLabelText(/文件夹/)).toBeNull();
+  });
+
+  it('calls onRefresh from 刷新本题 without adding a chat surface', () => {
+    const onRefresh = jest.fn();
+    render(<InProgressPanel snapshot={snapshot} onRefresh={onRefresh} />);
+    fireEvent.click(screen.getByTestId('refresh-coach'));
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByRole('log')).toBeNull();
+    expect(document.querySelector('.bubble')).toBeNull();
+  });
+
+  it('disables 刷新本题 while refreshing', () => {
+    render(<InProgressPanel snapshot={snapshot} onRefresh={() => undefined} refreshing />);
+    const button = screen.getByTestId('refresh-coach');
+    expect(button).toHaveProperty('disabled', true);
+    expect(button.textContent).toBe('刷新中');
+  });
+
+  it('calls onEnd from 结束本场 without adding a chat surface', () => {
+    const onEnd = jest.fn();
+    render(<InProgressPanel snapshot={snapshot} onEnd={onEnd} />);
+    fireEvent.click(screen.getByTestId('end-exam'));
+    expect(onEnd).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByRole('log')).toBeNull();
+    expect(document.querySelector('.bubble')).toBeNull();
   });
 
   it('renders score placeholders without computing a number', () => {

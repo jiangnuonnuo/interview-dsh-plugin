@@ -1,7 +1,6 @@
 import { createElement } from 'react';
 import { EntryPanel } from '../../features/entry/EntryPanel';
 import type { EntryPort } from '../../features/entry/entry-port';
-import { examPanelState } from '../../features/entry/exam-panel-state';
 import { InterviewTriggerButton } from './InterviewTriggerButton';
 import { ENTRY_OVERLAY_ID, InterviewSlotPanel } from './InterviewSlotPanel';
 import { entrySurface } from './entry-surface';
@@ -136,7 +135,8 @@ const probeLayout = (ctx: ClientContext): LayoutPanels | undefined => {
 };
 
 /**
- * overlay 是浮层，不会挤对话列。打开官方 details 列让出右栏；关闭时钉住考场会话，避免回到空白新会话。
+ * overlay 是浮层，不会挤对话列。打开官方 details 列让出右栏。
+ * 关闭时不得 sessions.open 考场：用户可能已切到新会话，钉回去会把输入和历史都绑死在上一场。
  * 禁止注册 `details` 槽，那会盖掉宿主 DetailsPanel。
  */
 const openOverlayChrome = (ctx: ClientContext): void => {
@@ -146,10 +146,6 @@ const openOverlayChrome = (ctx: ClientContext): void => {
 const closeOverlayChrome = (ctx: ClientContext): void => {
   entrySurface.close();
   probeLayout(ctx)?.closeDetails();
-  const sessionId = examPanelState.get()?.sessionId;
-  if (sessionId !== undefined && sessionId.length > 0) {
-    probeSessions(ctx)?.open(sessionId);
-  }
 };
 
 const openOverlayFallback = (ctx: ClientContext, cause?: unknown): void => {

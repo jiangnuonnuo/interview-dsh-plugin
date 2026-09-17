@@ -17,6 +17,8 @@ describe('assembleInterviewerPersona', () => {
     expect(text).toMatch(/每次只问一个/);
     expect(text).toContain('是什么');
     expect(text).toContain('为什么');
+    expect(text).toMatch(/纠正上一问或补充讲解时只短说/);
+    expect(text).toContain('【本题】');
   });
 
   it('does not include coach scoring or standard-answer instructions', () => {
@@ -25,5 +27,6 @@ describe('assembleInterviewerPersona', () => {
     expect(text).not.toMatch(/五维/);
     expect(text).not.toMatch(/questionBrief/);
     expect(text).not.toMatch(/keyPoints/);
+    expect(text).toMatch(/禁止输出 JSON/);
   });
 });

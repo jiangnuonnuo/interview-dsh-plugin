@@ -11,7 +11,8 @@ const notify = (): void => {
 };
 
 /**
- * Overlay 关闭会卸载 EntryPanel；本场快照必须留在模块里，重开才能继续看守。
+ * Overlay 关闭会卸载 EntryPanel；本场快照留在模块里，重开「面试」才能继续看守。
+ * 「结束本场」必须清掉这份快照，否则入口被锁死，也无法再开一轮。
  */
 export const examPanelState = {
   get(): InProgressSnapshot | null {

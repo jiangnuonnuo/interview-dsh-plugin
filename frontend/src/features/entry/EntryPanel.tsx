@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react';
 import {
   CUSTOM_TOPIC_ID,
   DEFAULT_DIFFICULTY,
@@ -126,6 +126,15 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
   );
   const [watchError, setWatchError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const aliveRef = useRef(true);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -202,6 +211,37 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
     };
   }, [port, snapshot?.sessionId]);
 
+  const refreshCoach = async () => {
+    if (snapshot === null || refreshing) {
+      return;
+    }
+    const sessionId = snapshot.sessionId;
+    setRefreshing(true);
+    try {
+      const result = await port.watchCoachTurn({ sessionId, force: true });
+      if (!aliveRef.current) {
+        return;
+      }
+      if (!result.ok) {
+        setWatchError(result.message);
+        return;
+      }
+      if (result.status === 'updated') {
+        setWatchError(null);
+        examPanelState.set(result.snapshot);
+      }
+    } catch (cause: unknown) {
+      if (!aliveRef.current) {
+        return;
+      }
+      setWatchError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      if (aliveRef.current) {
+        setRefreshing(false);
+      }
+    }
+  };
+
   const visiblePresets = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) {
@@ -234,7 +274,22 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
   };
 
   if (snapshot) {
-    return <InProgressPanel snapshot={snapshot} error={watchError} onClose={onClose} />;
+    return (
+      <InProgressPanel
+        snapshot={snapshot}
+        error={watchError}
+        onClose={onClose}
+        onRefresh={() => {
+          void refreshCoach();
+        }}
+        onEnd={() => {
+          examPanelState.set(null);
+          setWatchError(null);
+          setRefreshing(false);
+        }}
+        refreshing={refreshing}
+      />
+    );
   }
 
   return (

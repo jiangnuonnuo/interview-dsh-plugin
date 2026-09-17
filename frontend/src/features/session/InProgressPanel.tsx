@@ -8,9 +8,19 @@ export interface InProgressPanelProps {
   snapshot: InProgressSnapshot;
   error?: string | null;
   onClose?: () => void;
+  onRefresh?: () => void;
+  onEnd?: () => void;
+  refreshing?: boolean;
 }
 
-export const InProgressPanel = ({ snapshot, error, onClose }: InProgressPanelProps) => {
+export const InProgressPanel = ({
+  snapshot,
+  error,
+  onClose,
+  onRefresh,
+  onEnd,
+  refreshing = false,
+}: InProgressPanelProps) => {
   return (
     <aside className={styles.panel} aria-label="模拟面试进行中">
       <header className={styles.head}>
@@ -34,9 +44,27 @@ export const InProgressPanel = ({ snapshot, error, onClose }: InProgressPanelPro
               {error}
             </p>
           ) : null}
+          {onEnd !== undefined ? (
+            <button type="button" className={styles.end} data-testid="end-exam" onClick={onEnd}>
+              结束本场
+            </button>
+          ) : null}
         </section>
         <section>
-          <h2 className={styles.block}>本题题干</h2>
+          <div className={styles.blockHead}>
+            <h2 className={styles.block}>本题题干</h2>
+            {onRefresh !== undefined ? (
+              <button
+                type="button"
+                className={styles.refresh}
+                data-testid="refresh-coach"
+                onClick={onRefresh}
+                disabled={refreshing}
+              >
+                {refreshing ? '刷新中' : '刷新本题'}
+              </button>
+            ) : null}
+          </div>
           <p className={styles.brief}>{snapshot.questionBrief}</p>
         </section>
         <section>

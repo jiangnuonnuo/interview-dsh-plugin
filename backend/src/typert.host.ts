@@ -90,6 +90,7 @@ const briefResultSchema = z.union([
 
 const watchRequestSchema = z.object({
   sessionId: z.string(),
+  force: z.boolean().optional(),
 });
 
 const watchResultSchema = z.union([

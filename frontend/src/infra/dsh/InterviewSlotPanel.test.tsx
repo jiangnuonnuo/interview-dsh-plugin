@@ -135,7 +135,7 @@ describe('openInterviewTab', () => {
     expect(calls).toEqual(['open', 'close']);
   });
 
-  it('pins the exam session when the overlay closes', () => {
+  it('does not pin the exam session when the overlay closes', () => {
     const opened: string[] = [];
     examPanelState.set(examSnapshot);
     entrySurface.open();
@@ -151,7 +151,7 @@ describe('openInterviewTab', () => {
           : undefined,
     });
     expect(entrySurface.isOpen()).toBe(false);
-    expect(opened).toEqual(['session-exam']);
+    expect(opened).toEqual([]);
   });
 });
 

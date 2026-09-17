@@ -382,4 +382,54 @@ describe('createHostCoachRuntime', () => {
       expect(result.message.length).toBeGreaterThan(0);
     }
   });
+
+  /**
+   * Desktop 第 5 轮：面试官同一气泡先点评页分裂/磁盘 I/O，再抛出联合索引待答问。
+   * 现行实现把整段助手文本当题干，教练会跟着讲评走；面板必须只对齐待答问。
+   */
+  it('uses only the pending question when the interviewer lectures then asks', async () => {
+    const previous = 'InnoDB 页分裂后物理数据如何存储，对磁盘 I/O 有什么影响？';
+    const pending = '联合索引 (col_a, col_b) 在什么查询条件下最左匹配会失效？';
+    const mixed = [
+      '你刚才说没影响，这个判断不准确。',
+      'InnoDB 页分裂后新页往往不与原页连续，范围扫描会变成更多随机读，放大磁盘 I/O。',
+      pending,
+    ].join('\n\n');
+    const runtime = createHostCoachRuntime({
+      agents: {
+        get: () => ({
+          whenIdle: async () => undefined,
+          status: 'idle',
+          session: {
+            events: [
+              {
+                type: 'user/message',
+                data: { role: 'user', content: [{ type: 'text', text: '没影响' }], source: { kind: 'user' } },
+              },
+              {
+                type: 'assistant/message',
+                data: {
+                  message: {
+                    role: 'assistant',
+                    content: [{ type: 'text', text: mixed }],
+                    source: { kind: 'model' },
+                  },
+                },
+              },
+            ],
+          },
+        }),
+      },
+    });
+
+    await expect(runtime.readLatestQuestion('session-exam')).resolves.toEqual({
+      ok: true,
+      text: pending,
+    });
+    await expect(runtime.awaitNewQuestion('session-exam', previous)).resolves.toEqual({
+      ok: true,
+      status: 'ready',
+      text: pending,
+    });
+  });
 });

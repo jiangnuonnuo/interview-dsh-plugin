@@ -30,6 +30,25 @@ describe('assembleCoachBriefPrompt', () => {
     expect(user).toContain(questionText);
     expect(user).toContain('面试官当前问题：');
     expect(user).not.toContain('面试官第一问：');
+    expect(system).toMatch(/当前待答问/);
+    expect(system).toMatch(/忽略同一段里对上一问的点评/);
+  });
+
+  it('puts only the pending question in the user message when the turn mixes lecture and a question', () => {
+    const pending = '联合索引 (col_a, col_b) 在什么查询条件下最左匹配会失效？';
+    const mixed = [
+      '你刚才说没影响，这个判断不准确。',
+      'InnoDB 页分裂后新页往往不与原页连续，范围扫描会变成更多随机读，放大磁盘 I/O。',
+      pending,
+    ].join('\n\n');
+    const { user } = assembleCoachBriefPrompt({
+      topic,
+      difficulty,
+      questionText: mixed,
+    });
+    expect(user).toContain(pending);
+    expect(user).not.toContain('你刚才说没影响');
+    expect(user).not.toContain('页分裂后新页');
   });
 
   it('does not include the interviewer role template', () => {

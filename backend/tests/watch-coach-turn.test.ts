@@ -141,4 +141,31 @@ describe('watchCoachTurnSession', () => {
     expect(examSessions.load('session-exam')?.snapshot).toEqual(snapshot);
     expect(examSessions.load('session-exam')?.lastQuestionText).toBe('请说明聚簇索引。');
   });
+
+  it('force-briefs the current pending question even when the fingerprint is unchanged', async () => {
+    const complete = jest.fn(async () => '{"questionBrief":"强制刷新摘要","keyPoints":["强制刷新要点"]}');
+    const awaitNewQuestion = jest.fn(async () => ({ ok: true as const, status: 'unchanged' as const }));
+    const runtime: CoachRuntime = {
+      readLatestQuestion: async () => ({ ok: true, text: '请说明聚簇索引。' }),
+      awaitNewQuestion,
+      complete,
+    };
+    const examSessions = seedStore();
+    const watched = await watchCoachTurnSession(runtime, examSessions, { sessionId: 'session-exam' });
+    expect(watched).toEqual({ ok: true, status: 'unchanged' });
+    expect(complete).not.toHaveBeenCalled();
+
+    const forced = await watchCoachTurnSession(runtime, examSessions, {
+      sessionId: 'session-exam',
+      force: true,
+    });
+    expect(forced.ok).toBe(true);
+    if (forced.ok && forced.status === 'updated') {
+      expect(forced.snapshot.questionBrief).toBe('强制刷新摘要');
+      expect(forced.snapshot.keyPoints).toEqual(['强制刷新要点']);
+    }
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(examSessions.load('session-exam')?.lastQuestionText).toBe('请说明聚簇索引。');
+    expect(examSessions.load('session-exam')?.snapshot.questionBrief).toBe('强制刷新摘要');
+  });
 });
