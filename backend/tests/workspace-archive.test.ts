@@ -101,29 +101,58 @@ const createHostLikeFs = () => {
 };
 
 describe('workspace archive', () => {
-  it('writes session.json and per-card markdown under the study path', async () => {
+  it('derives a hidden session directory from a legal session id', () => {
+    expect(archiveDirFor('session-exam')).toBe('.dsh-interview/session-exam');
+    expect(archiveDirFor('session-eefe484c-9237-42b8-95da-25d9d8458fe4')).toBe(
+      '.dsh-interview/session-eefe484c-9237-42b8-95da-25d9d8458fe4',
+    );
+  });
+
+  it('rejects empty or traversing session ids', () => {
+    expect(archiveDirFor('')).toBeUndefined();
+    expect(archiveDirFor('../outside')).toBeUndefined();
+    expect(archiveDirFor('session/exam')).toBeUndefined();
+    expect(archiveDirFor('session\\exam')).toBeUndefined();
+    expect(archiveDirFor('session..exam')).toBeUndefined();
+  });
+
+  it('writes session.json and per-card markdown under .dsh-interview/<id>', async () => {
     const { files, fs } = createFakeFs();
-    const archive = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' }, {
-      now: () => new Date(2026, 8, 17, 14, 30, 0),
-    });
+    const archive = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' });
     const written = await archive.writeDeck({ ...twoCardDeck, archiveDir: '' });
     expect(written.ok).toBe(true);
     if (!written.ok) {
       return;
     }
-    expect(written.archiveDir).toBe(archiveDirFor('MySQL 索引与优化', new Date(2026, 8, 17, 14, 30, 0)));
+    expect(written.archiveDir).toBe(archiveDirFor('session-exam'));
     const jsonPath = `/workspace/${written.archiveDir}/session.json`;
     expect(files.get(jsonPath)).toContain('"currentCardId": "Q1.1"');
     expect(files.get(`/workspace/${written.archiveDir}/cards/Q1.md`)).toContain('# Q1');
     expect(files.get(`/workspace/${written.archiveDir}/cards/Q1.1.md`)).toContain('# Q1.1');
+    expect(files.has('/workspace/study/interview-dsh/20260917-1430-MySQL-索引与优化/session.json')).toBe(
+      false,
+    );
     expect(renderCardMarkdown(twoCardDeck, 'Q1')).toContain('叶子即行');
+  });
+
+  it('ignores a leftover study archiveDir on write', async () => {
+    const { files, fs } = createFakeFs();
+    const archive = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' });
+    const written = await archive.writeDeck(twoCardDeck);
+    expect(written.ok).toBe(true);
+    if (!written.ok) {
+      return;
+    }
+    expect(written.archiveDir).toBe('.dsh-interview/session-exam');
+    expect(files.has('/workspace/.dsh-interview/session-exam/session.json')).toBe(true);
+    expect(files.has('/workspace/study/interview-dsh/20260917-1430-MySQL-索引与优化/session.json')).toBe(
+      false,
+    );
   });
 
   it('writes through async resolve + FsTarget writeText like Desktop ctx.fs', async () => {
     const { files, fs } = createHostLikeFs();
-    const archive = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' }, {
-      now: () => new Date(2026, 8, 17, 14, 30, 0),
-    });
+    const archive = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' });
     const written = await archive.writeDeck({ ...twoCardDeck, archiveDir: '' });
     expect(written.ok).toBe(true);
     if (!written.ok) {
@@ -135,18 +164,17 @@ describe('workspace archive', () => {
     expect(loaded?.cards.map((card) => card.id)).toEqual(['Q1', 'Q1.1']);
   });
 
-  it('reads the two-card deck back from the fake archive', async () => {
+  it('reads the two-card deck back from a new archive instance', async () => {
     const { fs } = createFakeFs();
-    const archive = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' }, {
-      now: () => new Date(2026, 8, 17, 14, 30, 0),
-    });
-    const written = await archive.writeDeck({ ...twoCardDeck, archiveDir: '' });
+    const writer = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' });
+    const written = await writer.writeDeck({ ...twoCardDeck, archiveDir: '' });
     expect(written.ok).toBe(true);
-    const loaded = await archive.readDeck('session-exam');
+    const reader = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' });
+    const loaded = await reader.readDeck('session-exam');
     expect(loaded?.cards.map((card) => card.id)).toEqual(['Q1', 'Q1.1']);
   });
 
-  it('returns persist_unavailable without fs or cwd', async () => {
+  it('returns persist_unavailable without fs, cwd, or a legal session id', async () => {
     const missingFs = createFsWorkspaceArchive(undefined, { cwdFor: () => '/workspace' });
     await expect(missingFs.writeDeck(twoCardDeck)).resolves.toEqual({
       ok: false,
@@ -155,6 +183,13 @@ describe('workspace archive', () => {
     });
     const missingCwd = createFsWorkspaceArchive(createFakeFs().fs, { cwdFor: () => undefined });
     await expect(missingCwd.writeDeck(twoCardDeck)).resolves.toMatchObject({
+      ok: false,
+      code: 'persist_unavailable',
+    });
+    const badId = createFsWorkspaceArchive(createFakeFs().fs, { cwdFor: () => '/workspace' });
+    await expect(
+      badId.writeDeck({ ...twoCardDeck, sessionId: '../outside' }),
+    ).resolves.toMatchObject({
       ok: false,
       code: 'persist_unavailable',
     });

@@ -5,7 +5,12 @@ import type {
   BriefCoachResponse,
   StartInterviewResponse,
 } from 'interview-dsh-shared';
-import { startExamRoom, type ExamRoomHost, type ExamRoomSessions } from './start-exam-room';
+import {
+  startExamRoom,
+  type ExamRoomHost,
+  type ExamRoomSessions,
+  type ExamWorkspaces,
+} from './start-exam-room';
 
 export interface StartInterviewHost extends ExamRoomHost {
   acceptEntryConfig(request: AcceptEntryConfigRequest): Promise<AcceptEntryConfigResponse>;
@@ -13,7 +18,11 @@ export interface StartInterviewHost extends ExamRoomHost {
 }
 
 export const startInterview = async (
-  deps: { sessions: ExamRoomSessions | undefined; host: StartInterviewHost },
+  deps: {
+    sessions: ExamRoomSessions | undefined;
+    workspaces?: ExamWorkspaces;
+    host: StartInterviewHost;
+  },
   request: AcceptEntryConfigRequest,
 ): Promise<StartInterviewResponse> => {
   const accepted = await deps.host.acceptEntryConfig(request);
@@ -22,7 +31,7 @@ export const startInterview = async (
   }
 
   const exam = await startExamRoom(
-    { sessions: deps.sessions, host: deps.host },
+    { sessions: deps.sessions, workspaces: deps.workspaces, host: deps.host },
     { topic: accepted.config.topic, difficulty: accepted.config.difficulty },
   );
   if (!exam.ok) {

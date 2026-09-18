@@ -38,10 +38,6 @@ export interface WorkspaceTextFs {
   ): Promise<WorkspaceFsHandle> | WorkspaceFsHandle;
 }
 
-export interface ArchiveClock {
-  now(): Date;
-}
-
 export interface ArchiveWorkspaceLookup {
   cwdFor(sessionId: string): string | undefined;
 }
@@ -81,26 +77,23 @@ const writeAll = async (fs: WorkspaceTextFs, deck: InterviewDeck, cwd: string): 
 export const createFsWorkspaceArchive = (
   fs: WorkspaceTextFs | undefined,
   workspace: ArchiveWorkspaceLookup,
-  clock: ArchiveClock = { now: () => new Date() },
 ): WorkspaceArchive => {
-  const dirs = new Map<string, string>();
   return {
     async writeDeck(deck): Promise<WriteDeckResult> {
       if (fs === undefined) {
         return persistUnavailable();
       }
       const cwd = workspace.cwdFor(deck.sessionId);
-      if (cwd === undefined || cwd.length === 0) {
+      const archiveDir = archiveDirFor(deck.sessionId);
+      if (cwd === undefined || cwd.length === 0 || archiveDir === undefined) {
         return persistUnavailable();
       }
-      const archiveDir = deck.archiveDir.length > 0 ? deck.archiveDir : archiveDirFor(deck.topic, clock.now());
       const next: InterviewDeck = { ...deck, archiveDir };
       try {
         await writeAll(fs, next, cwd);
       } catch {
         return persistUnavailable();
       }
-      dirs.set(deck.sessionId, archiveDir);
       return { ok: true, archiveDir };
     },
     async readDeck(sessionId) {
@@ -108,7 +101,7 @@ export const createFsWorkspaceArchive = (
         return undefined;
       }
       const cwd = workspace.cwdFor(sessionId);
-      const archiveDir = dirs.get(sessionId);
+      const archiveDir = archiveDirFor(sessionId);
       if (cwd === undefined || archiveDir === undefined) {
         return undefined;
       }

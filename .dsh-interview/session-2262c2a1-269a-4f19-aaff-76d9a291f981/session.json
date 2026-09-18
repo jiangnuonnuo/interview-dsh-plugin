@@ -1,0 +1,49 @@
+{
+  "phase": "in_progress",
+  "sessionId": "session-2262c2a1-269a-4f19-aaff-76d9a291f981",
+  "topic": "MySQL 索引与优化",
+  "difficulty": "mid",
+  "archiveDir": ".dsh-interview/session-2262c2a1-269a-4f19-aaff-76d9a291f981",
+  "cards": [
+    {
+      "id": "Q1",
+      "questionText": "**第一题：请你说说 MySQL 中 InnoDB 的 B+树索引的叶子节点和非叶子节点分别存储了什么，以及 B+树的高度为什么一般控制在 3~4 层？**",
+      "questionBrief": "InnoDB B+树索引的叶子节点与非叶子节点存储内容，以及B+树高度一般控制在3~4层的原因",
+      "keyPoints": [
+        "非叶子节点（除根节点外）仅存储索引键值和指向子节点页的指针，用于索引层级导航，不存储实际行数据",
+        "叶子节点存储完整的索引键值，若为主键索引则存储对应行记录，若为二级索引则存储对应行记录的主键值，同时每个叶子节点包含指向下一个叶子节点的指针，所有叶子节点构成有序双向链表",
+        "InnoDB默认页大小为16KB，非叶子节点单个索引项占空间较小，单页可存储大量索引项，这是B+树高度可控的基础",
+        "以索引键占6B、指针占6B计算，单页非叶子节点可存约1000个索引项，3层B+树最多可支撑约10亿条数据的存储，满足绝大多数业务数据量需求",
+        "每次索引查询需加载的页数等于B+树高度，高度控制在3~4层可将查询所需的磁盘IO次数控制在3~4次，保障查询性能",
+        "B+树高度过高会导致磁盘IO次数增加，查询性能显著下降，因此通常通过合理的索引设计、数据分片等方式将高度控制在3~4层"
+      ],
+      "answer": null,
+      "comparison": null,
+      "scores": [
+        {
+          "dimension": "基础扎实度",
+          "score": null
+        },
+        {
+          "dimension": "原理理解",
+          "score": null
+        },
+        {
+          "dimension": "场景迁移",
+          "score": null
+        },
+        {
+          "dimension": "深度边界",
+          "score": null
+        },
+        {
+          "dimension": "表达清晰度",
+          "score": null
+        }
+      ],
+      "status": "pending",
+      "seedUserText": "<system-reminder>\nA skill is a reusable set of task-specific instructions. The following skills are available in this session:\n\n<available_skills>\n- `fireworks-tech-graph`: Create precise SVG technical diagrams, export PNG or offline HTML, and animate supported semantic SVGs to GIF. Use for architecture, UML, agent, cloud or workflow diagrams; not photos, raster art or statistical charts.\n- `pi-control-chrome`: Control the user's existing Chrome or Edge profile through pi-control-chrome browser tools and the local Bridge. Use for browser tabs, logged-in sessions, page inspection, interaction, screenshots, uploads, downloads, dialogs, clipboard, console/network/CDP, tab handoff or cleanup, and diagnosing Bridge, extension, browser-target, or stale-handle problems.\n</available_skills>\n\nIf the user names a skill, or the task clearly matches a skill's description, call the `skill` tool with the exact skill name before taking task actions. Load all applicable skills, then follow their full instructions. This catalog contains summaries only; do not infer or follow a skill's instructions until it has been loaded.\nA user may also invoke a skill directly; its <skill_content> block then appears in this conversation. Follow it, and do not call the `skill` tool again for that skill.\n</system-reminder>"
+    }
+  ],
+  "currentCardId": "Q1"
+}

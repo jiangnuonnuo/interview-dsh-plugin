@@ -91,11 +91,13 @@ describe('frontend DSH adapter boundary', () => {
       .map((file) => readFileSync(file, 'utf8'))
       .join('\n');
     expect(source).not.toMatch(/fetch\(['"`]\/api\//);
-    expect(source).toMatch(/readService\(ctx, 'sessions'\)/);
-    expect(source).toMatch(/inject\(\['sessions'\]/);
+    expect(source).toMatch(/readService\(ctx, key\)/);
+    expect(source).toMatch(/probeNamedService\(ctx, 'sessions'/);
+    expect(source).toMatch(/probeNamedService\(ctx, 'workspaces'/);
     expect(source).toMatch(/inject\(\['layout'\]/);
-    expect(source).not.toMatch(/inject = \['slots', 'remote', 'sessions'\]/);
     expect(source).toMatch(/export const inject = \['slots', 'remote'\]/);
+    expect(source).not.toMatch(/inject = \['slots', 'remote', 'sessions'\]/);
+    expect(source).not.toMatch(/inject = \['slots', 'remote', 'workspaces'\]/);
     expect(source).not.toMatch(/inject\(['"]details['"]/);
     expect(source).not.toMatch(/name: ['"]details['"]/);
   });

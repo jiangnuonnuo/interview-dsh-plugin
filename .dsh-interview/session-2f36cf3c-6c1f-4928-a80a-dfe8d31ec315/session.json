@@ -1,0 +1,49 @@
+{
+  "phase": "in_progress",
+  "sessionId": "session-2f36cf3c-6c1f-4928-a80a-dfe8d31ec315",
+  "topic": "MySQL 索引与优化",
+  "difficulty": "mid",
+  "archiveDir": ".dsh-interview/session-2f36cf3c-6c1f-4928-a80a-dfe8d31ec315",
+  "cards": [
+    {
+      "id": "Q1",
+      "questionText": "**请先说说什么是索引？MySQL 中常见的索引底层数据结构有哪些？分别用在什么场景下？**",
+      "questionBrief": "索引的定义、MySQL常见索引底层数据结构类型及各自适用场景",
+      "keyPoints": [
+        "索引本质：高效查询的数据结构（类似目录），以空间换时间，减少磁盘IO次数",
+        "B+树：InnoDB/MyISAM默认索引结构，多路平衡搜索树，非叶子节点存索引、叶子节点存数据并通过链表连接，适合范围查询、排序、分组操作",
+        "Hash索引：Memory引擎默认，基于哈希表实现，等值查询复杂度O(1)，但不支持范围查询、排序及最左前缀匹配，存在哈希冲突问题",
+        "全文索引(Full-text)：基于倒排索引，用于文本内容的关键词搜索（MATCH AGAINST），适用于大文本字段",
+        "空间索引(R-tree)：MyISAM引擎支持，用于地理空间数据的多维查询",
+        "自适应Hash索引：InnoDB内部自动对频繁访问的索引页构建，无需手动创建，提升等值查询性能"
+      ],
+      "answer": null,
+      "comparison": null,
+      "scores": [
+        {
+          "dimension": "基础扎实度",
+          "score": null
+        },
+        {
+          "dimension": "原理理解",
+          "score": null
+        },
+        {
+          "dimension": "场景迁移",
+          "score": null
+        },
+        {
+          "dimension": "深度边界",
+          "score": null
+        },
+        {
+          "dimension": "表达清晰度",
+          "score": null
+        }
+      ],
+      "status": "pending",
+      "seedUserText": "<system-reminder>\nA skill is a reusable set of task-specific instructions. The following skills are available in this session:\n\n<available_skills>\n- `fireworks-tech-graph`: Create precise SVG technical diagrams, export PNG or offline HTML, and animate supported semantic SVGs to GIF. Use for architecture, UML, agent, cloud or workflow diagrams; not photos, raster art or statistical charts.\n- `pi-control-chrome`: Control the user's existing Chrome or Edge profile through pi-control-chrome browser tools and the local Bridge. Use for browser tabs, logged-in sessions, page inspection, interaction, screenshots, uploads, downloads, dialogs, clipboard, console/network/CDP, tab handoff or cleanup, and diagnosing Bridge, extension, browser-target, or stale-handle problems.\n</available_skills>\n\nIf the user names a skill, or the task clearly matches a skill's description, call the `skill` tool with the exact skill name before taking task actions. Load all applicable skills, then follow their full instructions. This catalog contains summaries only; do not infer or follow a skill's instructions until it has been loaded.\nA user may also invoke a skill directly; its <skill_content> block then appears in this conversation. Follow it, and do not call the `skill` tool again for that skill.\n</system-reminder>"
+    }
+  ],
+  "currentCardId": "Q1"
+}

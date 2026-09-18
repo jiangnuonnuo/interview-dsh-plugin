@@ -6,7 +6,7 @@ import { ENTRY_OVERLAY_ID, InterviewSlotPanel } from './InterviewSlotPanel';
 import { entrySurface } from './entry-surface';
 import { interviewEntryRemote } from './remote';
 import { createInterviewPort, createUnavailableEntryPort, type InterviewRemote } from './remote-port';
-import type { ExamRoomSessions } from './start-exam-room';
+import type { ExamRoomSessions, ExamWorkspaces } from './start-exam-room';
 
 export const name = 'interview-dsh';
 export const inject = ['slots', 'remote'];
@@ -75,27 +75,48 @@ const asExamRoomSessions = (value: unknown): ExamRoomSessions | undefined => {
   return sessions as ExamRoomSessions;
 };
 
-/**
- * `sessions` 不能写进 Client 顶层 inject。探测只用 ctx.get，再退回嵌套 inject。
- * 必须在点「开始」时再探一次：apply 时会话服务可能还没进这个 fiber。
- */
-const probeSessions = (ctx: ClientContext): ExamRoomSessions | undefined => {
-  const fromGet = asExamRoomSessions(readService(ctx, 'sessions'));
+const asExamWorkspaces = (value: unknown): ExamWorkspaces | undefined => {
+  if (value === null || typeof value !== 'object') {
+    return undefined;
+  }
+  const list = (value as { list?: { getSnapshot?: unknown } }).list;
+  if (list === undefined || typeof list.getSnapshot !== 'function') {
+    return undefined;
+  }
+  return value as ExamWorkspaces;
+};
+
+const probeNamedService = <T>(
+  ctx: ClientContext,
+  key: string,
+  asService: (value: unknown) => T | undefined,
+): T | undefined => {
+  const fromGet = asService(readService(ctx, key));
   if (fromGet !== undefined) {
     return fromGet;
   }
   try {
-    let found: ExamRoomSessions | undefined;
-    ctx.inject(['sessions'], (scoped) => {
+    let found: T | undefined;
+    ctx.inject([key], (scoped) => {
       found =
-        asExamRoomSessions((scoped as ClientContext & { sessions?: unknown }).sessions) ??
-        asExamRoomSessions(readService(scoped, 'sessions'));
+        asService((scoped as ClientContext & Record<string, unknown>)[key]) ??
+        asService(readService(scoped, key));
     });
     return found;
   } catch {
     return undefined;
   }
 };
+
+/**
+ * `sessions` / `workspaces` 不能写进 Client 顶层 inject。探测只用 ctx.get，再退回嵌套 inject。
+ * 必须在点「开始」时再探一次：apply 时会话服务可能还没进这个 fiber。
+ */
+const probeSessions = (ctx: ClientContext): ExamRoomSessions | undefined =>
+  probeNamedService(ctx, 'sessions', asExamRoomSessions);
+
+const probeWorkspaces = (ctx: ClientContext): ExamWorkspaces | undefined =>
+  probeNamedService(ctx, 'workspaces', asExamWorkspaces);
 
 const officialOpenTab = (ctx: ClientContext): ((kind: string) => void) | undefined => {
   const sidebarRight = readService(ctx, 'sidebarRight') as SidebarRightApi | undefined;
@@ -207,7 +228,11 @@ export async function apply(ctx: ClientContext): Promise<void> {
     }, 'interview-dsh: remote contribution');
         const namespace = readService(ctx, 'remote.interviewEntry') as InterviewRemote | undefined;
     if (namespace !== undefined) {
-      port = createInterviewPort(namespace, () => probeSessions(ctx));
+      port = createInterviewPort(
+        namespace,
+        () => probeSessions(ctx),
+        () => probeWorkspaces(ctx),
+      );
     }
   }
 

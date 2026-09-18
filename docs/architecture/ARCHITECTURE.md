@@ -89,7 +89,7 @@ frontend/infra/dsh            backend/infra/dsh
 
 - 只出现在 `backend/src/infra/dsh/`。
 - Host 需要的服务在 `apply` 的 `inject` 里声明（当前：`agents`、`llm`、`agentDefaultModel`、`fs`）。查不到时用 `ctx.get('…')` 探测，仍没有就返回对应错误码。
-- 文件系统只走 Host `ctx.fs`：先 `ctx.fs.resolve(rel, { cwd })` 得到 FsTarget 再写，并带工作区写入策略。禁止 `node:fs`，不得把路径字符串直接传给 `writeText`。
+- 文件系统只走 Host `ctx.fs`：先 `ctx.fs.resolve(rel, { cwd })` 得到 FsTarget 再写，并带工作区写入策略。禁止 `node:fs`，不得把路径字符串直接传给 `writeText`。工作区根是考场会话 `header.cwd`；相对路径为 `.dsh-interview/<考场 sessionId>/`（`session.json` 与 `cards/<id>.md`）。读盘用同一公式，不依赖进程内路径表。
 - 禁止在 Host 注册 Slot、右栏 tab 或输入栏按钮。
 - 端口清单、各端口的行为与错误码由对应 OpenSpec change 定义；本层只负责把能力交给正确的会话。
 - 教练输出不得进对话气泡；插件不得再向考场会话 `prompt` 催题。
@@ -100,13 +100,13 @@ frontend/infra/dsh            backend/infra/dsh
 - 只出现在 `frontend/src/infra/dsh/`；功能在 `frontend/src/features/`，通过 port 接口拿数据。
 - 入口只展开面板：不跳转、不新建聊天、不更换当前对话。
 - 根包 `dsh.client.inject` 声明要加载的官方包，当前为 runtime、api-remotes、ui-layout（`shell.overlay` 宿主）、ui-conversation（输入栏按钮）；用到新的官方能力就补声明。
-- Client `apply` 的 `inject` 只声明沙箱确实提供的服务（当前 `['slots', 'remote']`）。额外服务只用 `ctx.get('…')` 探测，`get` 返回 `undefined` 后不得再直接读 `ctx.<service>`。
+- Client `apply` 的 `inject` 只声明沙箱确实提供的服务（当前 `['slots', 'remote']`）。额外服务只用 `ctx.get('…')` 探测，`get` 返回 `undefined` 后不得再直接读 `ctx.<service>`。`sessions` 与 `workspaces` 都按这条探测，禁止写进顶层 inject。
 - 具体 Slot、id、打开与回退分支、失败呈现由对应 OpenSpec change 定义。
 - 已否决的接法见 `docs/FORBIDDEN.md`：顶层声明本机没有的服务、`slots.inject('details')`、拿非官方 sidebar 顶替官方符号等。
 
 ## 5. 会话隔离
 
-开始面试后是两条会话。会话 A 是 **新开的 DSH 对话**（Client `sessions.create`），不是把面试官注入用户正在看的那条编码对话。配置仍来自当前工作区 / 默认模型，插件不得另配 Key。具体开口文案与面板字段由当前 OpenSpec change 定义。
+开始面试后是两条会话。会话 A 是 **新开的 DSH 对话**（Client `sessions.create`），不是把面试官注入用户正在看的那条编码对话。创建时必须带当前工作区 `workspaceId`（Host 才会 `attachSession`，会话出现在该项目分组下）。仅传 `cwd` 只会写入目录、侧栏进「未分组」。`workspaceId` 从 `workspaces.list` 解析：当前会话已在某工作区账户里则用该 id；否则顶栏 `recentWorkspaceId`；否则 `cwd` 与 `items[].path` 对齐；都没有时才退回 `create({ cwd })`。配置仍来自当前工作区 / 默认模型，插件不得另配 Key。具体开口文案与面板字段由当前 OpenSpec change 定义。
 
 两条会话的产品角色见 `docs/product/REQUIREMENTS.md`。
 
@@ -121,7 +121,7 @@ frontend/infra/dsh            backend/infra/dsh
 
 提示词在 `backend/src/services/` 模板化；`infra/dsh/` 只负责交给哪条会话。面试官口径来自 `interviewer-role-prompt.md`，不在适配层手写一套角色。
 
-工作区写入走 `backend` 的 `data/` / `infra/`，失败必须映射到面板可见错误；前端不直接写文件。
+工作区写入走 `backend` 的 `data/` / `infra/`，失败必须映射到面板可见错误；前端不直接写文件。新场只写 `.dsh-interview/<考场 sessionId>/`，不迁既有 `study/` 档案。
 
 ## 6. 编码规范
 

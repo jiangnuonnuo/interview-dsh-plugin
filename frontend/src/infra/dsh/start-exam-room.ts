@@ -30,33 +30,106 @@ export interface ExamRoomSessions {
   };
 }
 
+export interface ExamWorkspaceItem {
+  readonly workspaceId?: unknown;
+  readonly path?: unknown;
+  readonly sessionIds?: unknown;
+}
+
+export interface ExamWorkspaces {
+  readonly list?: {
+    getSnapshot(): {
+      readonly items?: readonly ExamWorkspaceItem[];
+      readonly recentWorkspaceId?: unknown;
+    };
+  };
+}
+
 export interface ExamRoomHost {
   attachInterviewer(request: AttachInterviewerRequest): Promise<AttachInterviewerResponse>;
 }
 
+const asNonEmptyString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.length > 0 ? value : undefined;
+
+const normalizePath = (value: string): string => value.replace(/[/\\]+$/, '');
+
+const workspaceItems = (workspaces: ExamWorkspaces | undefined): readonly ExamWorkspaceItem[] => {
+  const items = workspaces?.list?.getSnapshot?.()?.items;
+  return Array.isArray(items) ? items : [];
+};
+
+const ownerWorkspaceId = (
+  items: readonly ExamWorkspaceItem[],
+  match: (item: ExamWorkspaceItem) => boolean,
+): string | undefined => {
+  for (const item of items) {
+    if (!match(item)) {
+      continue;
+    }
+    const id = asNonEmptyString(item.workspaceId);
+    if (id !== undefined) {
+      return id;
+    }
+  }
+  return undefined;
+};
+
+/**
+ * Host 只有 create({ workspaceId }) 才会 attachSession；只传 cwd 会进未分组。
+ * 当前会话已在某项目下时信会话所属；未分组时信顶栏 recentWorkspaceId。
+ */
 export const resolveExamWorkspace = (
   sessions: ExamRoomSessions,
+  workspaces?: ExamWorkspaces,
 ): { cwd: string } | { workspaceId: string } | undefined => {
   const snapshot = sessions.list?.getSnapshot?.();
-  if (snapshot === undefined || typeof snapshot !== 'object') {
-    return undefined;
+  const current = asNonEmptyString(snapshot?.current);
+  const record = current !== undefined ? snapshot?.byId?.[current] : undefined;
+  const cwd = asNonEmptyString(record?.cwd);
+  const recordWorkspaceId = asNonEmptyString(record?.workspaceId);
+  const items = workspaceItems(workspaces);
+
+  if (current !== undefined) {
+    const grouped = ownerWorkspaceId(items, (item) => {
+      const ids = item.sessionIds;
+      return Array.isArray(ids) && ids.some((id) => id === current);
+    });
+    if (grouped !== undefined) {
+      return { workspaceId: grouped };
+    }
   }
-  const current = typeof snapshot.current === 'string' ? snapshot.current : undefined;
-  const record = current !== undefined ? snapshot.byId?.[current] : undefined;
-  if (record === undefined || typeof record !== 'object') {
-    return undefined;
+
+  const recent = asNonEmptyString(workspaces?.list?.getSnapshot?.()?.recentWorkspaceId);
+  if (recent !== undefined) {
+    return { workspaceId: recent };
   }
-  if (typeof record.cwd === 'string' && record.cwd.length > 0) {
-    return { cwd: record.cwd };
+
+  if (cwd !== undefined) {
+    const byPath = ownerWorkspaceId(
+      items,
+      (item) => asNonEmptyString(item.path) !== undefined && normalizePath(String(item.path)) === normalizePath(cwd),
+    );
+    if (byPath !== undefined) {
+      return { workspaceId: byPath };
+    }
   }
-  if (typeof record.workspaceId === 'string' && record.workspaceId.length > 0) {
-    return { workspaceId: record.workspaceId };
+
+  if (recordWorkspaceId !== undefined) {
+    return { workspaceId: recordWorkspaceId };
+  }
+  if (cwd !== undefined) {
+    return { cwd };
   }
   return undefined;
 };
 
 export const startExamRoom = async (
-  deps: { sessions: ExamRoomSessions | undefined; host: ExamRoomHost },
+  deps: {
+    sessions: ExamRoomSessions | undefined;
+    workspaces?: ExamWorkspaces;
+    host: ExamRoomHost;
+  },
   input: StartExamRoomInput,
 ): Promise<StartExamRoomResponse> => {
   const sessions = deps.sessions;
@@ -68,7 +141,7 @@ export const startExamRoom = async (
     };
   }
 
-  const workspace = resolveExamWorkspace(sessions);
+  const workspace = resolveExamWorkspace(sessions, deps.workspaces);
   if (workspace === undefined) {
     return {
       ok: false,

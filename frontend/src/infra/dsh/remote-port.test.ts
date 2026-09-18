@@ -76,4 +76,59 @@ describe('createInterviewPort', () => {
     expect(started).toEqual({ ok: true, deck });
     expect(sessions.open).toHaveBeenCalledWith('session-exam');
   });
+
+  it('creates the exam room with workspaceId when workspaces resolve at start time', async () => {
+    const create = jest.fn(async () => 'session-exam');
+    const remote = {
+      acceptEntryConfig: jest.fn(async () => ({
+        ok: true as const,
+        config: {
+          topic: 'MySQL 索引与优化',
+          difficulty: 'mid' as const,
+          topicKind: 'preset' as const,
+          topicId: 'mysql',
+        },
+      })),
+      getEntryConfig: jest.fn(),
+      attachInterviewer: jest.fn(async () => ({ ok: true as const })),
+      briefCoach: jest.fn(async () => ({ ok: true as const, deck })),
+      watchCoachTurn: jest.fn(),
+      loadDeck: jest.fn(),
+    };
+    const sessions: ExamRoomSessions = {
+      create,
+      binding() {
+        return {
+          session: {
+            prompt: async () => ({ ok: true }),
+          },
+        };
+      },
+      open: jest.fn(),
+      list: {
+        getSnapshot: () => ({
+          current: 'current-chat',
+          byId: { 'current-chat': { cwd: '/Users/jiang/xerina-atlas' } },
+        }),
+      },
+    };
+    const port = createInterviewPort(remote, () => sessions, () => ({
+      list: {
+        getSnapshot: () => ({
+          items: [
+            {
+              workspaceId: 'ws-atlas',
+              path: '/Users/jiang/xerina-atlas',
+              sessionIds: ['current-chat'],
+            },
+          ],
+          recentWorkspaceId: 'ws-atlas',
+        }),
+      },
+    }));
+
+    const started = await port.startInterview(mysqlRequest);
+    expect(started).toEqual({ ok: true, deck });
+    expect(create).toHaveBeenCalledWith({ workspaceId: 'ws-atlas' });
+  });
 });

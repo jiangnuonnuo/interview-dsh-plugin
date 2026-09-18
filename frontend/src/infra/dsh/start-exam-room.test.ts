@@ -1,14 +1,37 @@
 import { INTERVIEW_OPENING_PROMPT, INTERVIEW_SESSION_ERROR_MESSAGES } from 'interview-dsh-shared';
-import { startExamRoom, type ExamRoomSessions, type ExamRoomHost } from './start-exam-room';
+import {
+  startExamRoom,
+  type ExamRoomSessions,
+  type ExamRoomHost,
+  type ExamWorkspaces,
+} from './start-exam-room';
 
 const mysql = { topic: 'MySQL 索引与优化', difficulty: 'mid' as const };
 const workspace = { cwd: '/Users/jiang/workspace' };
-const withList = (sessions: Omit<ExamRoomSessions, 'list'>): ExamRoomSessions => ({
+const atlasPath = '/Users/jiang/xerina-atlas';
+const atlasWorkspaces = (sessionIds: readonly string[], recent = 'ws-atlas'): ExamWorkspaces => ({
+  list: {
+    getSnapshot: () => ({
+      items: [
+        {
+          workspaceId: 'ws-atlas',
+          path: atlasPath,
+          sessionIds,
+        },
+      ],
+      recentWorkspaceId: recent,
+    }),
+  },
+});
+const withList = (
+  sessions: Omit<ExamRoomSessions, 'list'>,
+  record: { cwd?: string; workspaceId?: string } = workspace,
+): ExamRoomSessions => ({
   ...sessions,
   list: {
     getSnapshot: () => ({
       current: 'current-chat',
-      byId: { 'current-chat': workspace },
+      byId: { 'current-chat': record },
     }),
   },
 });
@@ -125,6 +148,57 @@ describe('startExamRoom', () => {
       expect(result.code).toBe('inject_unavailable');
     }
     expect(host.attachInterviewer).not.toHaveBeenCalled();
+  });
+
+  it('creates with workspaceId when the current session already belongs to a workspace', async () => {
+    const create = jest.fn(async () => 'session-exam');
+    const sessions = withList(
+      {
+        create,
+        binding: () => ({ session: { prompt: async () => ({ ok: true }) } }),
+        open: jest.fn(),
+      },
+      { cwd: atlasPath },
+    );
+    const host: ExamRoomHost = {
+      async attachInterviewer() {
+        return { ok: true };
+      },
+    };
+
+    const result = await startExamRoom(
+      { sessions, workspaces: atlasWorkspaces(['current-chat']), host },
+      mysql,
+    );
+
+    expect(result).toEqual({ ok: true, sessionId: 'session-exam' });
+    expect(create).toHaveBeenCalledWith({ workspaceId: 'ws-atlas' });
+    expect(create).not.toHaveBeenCalledWith(expect.objectContaining({ cwd: expect.anything() }));
+  });
+
+  it('uses the picker workspace when the current session is ungrouped', async () => {
+    const create = jest.fn(async () => 'session-exam');
+    const sessions = withList(
+      {
+        create,
+        binding: () => ({ session: { prompt: async () => ({ ok: true }) } }),
+        open: jest.fn(),
+      },
+      { cwd: '/Users/jiang/leftover-exam' },
+    );
+    const host: ExamRoomHost = {
+      async attachInterviewer() {
+        return { ok: true };
+      },
+    };
+
+    const result = await startExamRoom(
+      { sessions, workspaces: atlasWorkspaces([], 'ws-atlas'), host },
+      mysql,
+    );
+
+    expect(result).toEqual({ ok: true, sessionId: 'session-exam' });
+    expect(create).toHaveBeenCalledWith({ workspaceId: 'ws-atlas' });
   });
 
   it('returns inject_unavailable when sessions.create throws', async () => {

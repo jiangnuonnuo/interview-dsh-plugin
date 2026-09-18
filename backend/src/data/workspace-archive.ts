@@ -27,22 +27,14 @@ export const persistUnavailable = (): PersistFailure => ({
   message: INTERVIEW_SESSION_ERROR_MESSAGES.persist_unavailable,
 });
 
-export const topicSlug = (topic: string): string => {
-  const slug = topic
-    .trim()
-    .replace(/[\\/:*?"<>|]/g, '')
-    .replace(/\s+/g, '-')
-    .slice(0, 48);
-  return slug.length > 0 ? slug : 'interview';
-};
+const ARCHIVE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
-export const archiveStamp = (at: Date): string => {
-  const pad = (value: number): string => String(value).padStart(2, '0');
-  return `${at.getFullYear()}${pad(at.getMonth() + 1)}${pad(at.getDate())}-${pad(at.getHours())}${pad(at.getMinutes())}`;
+export const archiveDirFor = (sessionId: string): string | undefined => {
+  if (!ARCHIVE_SESSION_ID.test(sessionId) || sessionId.includes('..')) {
+    return undefined;
+  }
+  return `.dsh-interview/${sessionId}`;
 };
-
-export const archiveDirFor = (topic: string, at: Date): string =>
-  `study/interview-dsh/${archiveStamp(at)}-${topicSlug(topic)}`;
 
 export const joinWorkspacePath = (cwd: string, rel: string): string =>
   `${cwd.replace(/[/\\]+$/, '')}/${rel.replace(/^[/\\]+/, '')}`;

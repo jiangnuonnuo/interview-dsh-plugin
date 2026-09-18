@@ -13,7 +13,7 @@ import type {
 } from 'interview-dsh-shared';
 import type { EntryPort } from '../../features/entry/entry-port';
 import { startInterview, type StartInterviewHost } from './start-interview';
-import type { ExamRoomSessions } from './start-exam-room';
+import type { ExamRoomSessions, ExamWorkspaces } from './start-exam-room';
 
 interface GatewayEnvelope<T> {
   readonly ok: boolean;
@@ -43,13 +43,18 @@ export interface InterviewRemote {
 }
 
 export type SessionsProbe = ExamRoomSessions | undefined | (() => ExamRoomSessions | undefined);
+export type WorkspacesProbe = ExamWorkspaces | undefined | (() => ExamWorkspaces | undefined);
 
 const resolveSessions = (sessions: SessionsProbe): ExamRoomSessions | undefined =>
   typeof sessions === 'function' ? sessions() : sessions;
 
+const resolveWorkspaces = (workspaces: WorkspacesProbe | undefined): ExamWorkspaces | undefined =>
+  typeof workspaces === 'function' ? workspaces() : workspaces;
+
 export const createInterviewPort = (
   remote: InterviewRemote,
   sessions: SessionsProbe,
+  workspaces?: WorkspacesProbe,
 ): EntryPort => {
   const host: StartInterviewHost = {
     acceptEntryConfig(request) {
@@ -71,7 +76,14 @@ export const createInterviewPort = (
       return unwrap(remote.getEntryConfig() as Promise<GetEntryConfigResponse>, 'getEntryConfig');
     },
     startInterview(request) {
-      return startInterview({ sessions: resolveSessions(sessions), host }, request);
+      return startInterview(
+        {
+          sessions: resolveSessions(sessions),
+          workspaces: resolveWorkspaces(workspaces),
+          host,
+        },
+        request,
+      );
     },
     watchCoachTurn(request) {
       return unwrap(remote.watchCoachTurn(request) as Promise<WatchCoachTurnResponse>, 'watchCoachTurn');
