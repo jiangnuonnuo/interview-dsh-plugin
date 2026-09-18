@@ -1,7 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, act } from '@testing-library/react';
 import {
   INTERVIEW_SESSION_ERROR_MESSAGES,
-  emptyBaguaScores,
   type AcceptEntryConfigRequest,
   type StartInterviewResponse,
 } from 'interview-dsh-shared';
@@ -19,7 +18,9 @@ const failingStartPort = (response: StartInterviewResponse): EntryPort => ({
 
 describe('EntryPanel start', () => {
   afterEach(() => {
-    examPanelState.set(null);
+    act(() => {
+      examPanelState.set(null);
+    });
   });
   it('enters 进行中 without rendering bubbles on success', async () => {
     render(<EntryPanel port={createMemoryEntryPort()} />);
@@ -30,6 +31,7 @@ describe('EntryPanel start', () => {
     });
     expect(screen.getByText('进行中')).toBeDefined();
     expect(screen.getByText('主题：MySQL 索引与优化')).toBeDefined();
+    expect(screen.getByTestId('card-id').textContent).toBe('Q1');
     expect(screen.queryByText('待开考')).toBeNull();
     expect(screen.queryByRole('log')).toBeNull();
     expect(document.querySelector('[data-chat-role]')).toBeNull();
@@ -86,7 +88,8 @@ describe('memory startInterview', () => {
     const result = await createMemoryEntryPort().startInterview(request);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.snapshot.scores).toEqual(emptyBaguaScores());
+      expect(result.deck.cards[0]?.id).toBe('Q1');
+      expect(result.deck.cards[0]?.scores.every((item) => item.score === null)).toBe(true);
     }
   });
 });

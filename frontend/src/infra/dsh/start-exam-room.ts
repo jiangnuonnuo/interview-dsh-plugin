@@ -16,15 +16,44 @@ interface PromptRemoteResult {
   readonly ok: boolean;
 }
 
+export interface ExamSessionListSnapshot {
+  readonly current?: string;
+  readonly byId?: Record<string, { readonly cwd?: string; readonly workspaceId?: string }>;
+}
+
 export interface ExamRoomSessions {
   create(opts?: { workspaceId?: string; cwd?: string; sessionId?: string }): Promise<string>;
   binding(id: string): { session: { prompt(content: PromptContentPart[], mode: 'queue' | 'steer'): Promise<PromptRemoteResult> } } | undefined;
   open(id: string): void;
+  list?: {
+    getSnapshot(): ExamSessionListSnapshot;
+  };
 }
 
 export interface ExamRoomHost {
   attachInterviewer(request: AttachInterviewerRequest): Promise<AttachInterviewerResponse>;
 }
+
+export const resolveExamWorkspace = (
+  sessions: ExamRoomSessions,
+): { cwd: string } | { workspaceId: string } | undefined => {
+  const snapshot = sessions.list?.getSnapshot?.();
+  if (snapshot === undefined || typeof snapshot !== 'object') {
+    return undefined;
+  }
+  const current = typeof snapshot.current === 'string' ? snapshot.current : undefined;
+  const record = current !== undefined ? snapshot.byId?.[current] : undefined;
+  if (record === undefined || typeof record !== 'object') {
+    return undefined;
+  }
+  if (typeof record.cwd === 'string' && record.cwd.length > 0) {
+    return { cwd: record.cwd };
+  }
+  if (typeof record.workspaceId === 'string' && record.workspaceId.length > 0) {
+    return { workspaceId: record.workspaceId };
+  }
+  return undefined;
+};
 
 export const startExamRoom = async (
   deps: { sessions: ExamRoomSessions | undefined; host: ExamRoomHost },
@@ -39,9 +68,18 @@ export const startExamRoom = async (
     };
   }
 
+  const workspace = resolveExamWorkspace(sessions);
+  if (workspace === undefined) {
+    return {
+      ok: false,
+      code: 'persist_unavailable',
+      message: INTERVIEW_SESSION_ERROR_MESSAGES.persist_unavailable,
+    };
+  }
+
   let sessionId: string;
   try {
-    sessionId = await sessions.create();
+    sessionId = await sessions.create(workspace);
   } catch {
     return {
       ok: false,

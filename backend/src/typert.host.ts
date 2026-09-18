@@ -42,6 +42,7 @@ const sessionErrorSchema = z.enum([
   'coach_unavailable',
   'first_question_failed',
   'follow_up_failed',
+  'persist_unavailable',
 ]);
 
 const attachResultSchema = z.union([
@@ -61,30 +62,51 @@ const briefRequestSchema = z.object({
   difficulty: difficultySchema,
 });
 
-const snapshotSchema = z.object({
+const cardSchema = z.object({
+  id: z.string(),
+  questionText: z.string(),
+  questionBrief: z.string(),
+  keyPoints: z.array(z.string()),
+  answer: z.union([z.string(), z.null()]),
+  comparison: z.union([
+    z.object({
+      covered: z.array(z.string()),
+      missed: z.array(z.string()),
+      comment: z.string(),
+    }),
+    z.null(),
+  ]),
+  scores: z.array(
+    z.object({
+      dimension: z.string(),
+      score: z.union([z.number(), z.null()]),
+      reason: z.string().optional(),
+    }),
+  ),
+  status: z.enum(['pending', 'scored']),
+  seedUserText: z.string(),
+});
+
+const deckSchema = z.object({
   phase: z.literal('in_progress'),
   sessionId: z.string(),
   topic: z.string(),
   difficulty: difficultySchema,
-  questionBrief: z.string(),
-  keyPoints: z.array(z.string()),
-  scores: z.array(
-    z.object({
-      dimension: z.string(),
-      score: z.null(),
-    }),
-  ),
+  archiveDir: z.string(),
+  cards: z.array(cardSchema),
+  currentCardId: z.string(),
 });
 
 const briefResultSchema = z.union([
   z.object({
     ok: z.literal(true),
-    snapshot: snapshotSchema,
+    deck: deckSchema,
   }),
   z.object({
     ok: z.literal(false),
     code: sessionErrorSchema,
     message: z.string(),
+    deck: deckSchema.optional(),
   }),
 ]);
 
@@ -97,11 +119,28 @@ const watchResultSchema = z.union([
   z.object({
     ok: z.literal(true),
     status: z.literal('updated'),
-    snapshot: snapshotSchema,
+    deck: deckSchema,
   }),
   z.object({
     ok: z.literal(true),
     status: z.literal('unchanged'),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: sessionErrorSchema,
+    message: z.string(),
+    deck: deckSchema.optional(),
+  }),
+]);
+
+const loadRequestSchema = z.object({
+  sessionId: z.string(),
+});
+
+const loadResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    deck: deckSchema,
   }),
   z.object({
     ok: z.literal(false),
@@ -154,6 +193,16 @@ const _watchResult$codec = {
   mode: 'strict' as const,
   typeSymbol: 'interview-dsh#WatchCoachTurnResponse',
   schema: watchResultSchema,
+};
+const _loadRequest$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#LoadDeckRequest',
+  schema: loadRequestSchema,
+};
+const _loadResult$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#LoadDeckResponse',
+  schema: loadResultSchema,
 };
 
 export const TYPERT = {
@@ -214,6 +263,17 @@ export const TYPERT = {
       ],
       result: _watchResult$codec,
     },
+    {
+      id: 'interview-dsh#interviewEntry/loadDeck',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'loadDeck',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        { name: 'request', wire: 'request', source: 'json' as const, codec: _loadRequest$codec },
+      ],
+      result: _loadResult$codec,
+    },
   ],
   model: {
     services: [
@@ -221,7 +281,7 @@ export const TYPERT = {
         description: 'interview-dsh 入口配置服务，校验并保存主题与难度。',
         summary: '八股专项入口配置服务。',
         tags: [],
-        jsDoc: '/** 入口配置：acceptEntryConfig / getEntryConfig / attachInterviewer / briefCoach / watchCoachTurn */',
+        jsDoc: '/** 入口配置：acceptEntryConfig / getEntryConfig / attachInterviewer / briefCoach / watchCoachTurn / loadDeck */',
         key: 'interviewEntry',
         exportName: 'InterviewEntryService',
         members: [
@@ -250,15 +310,22 @@ export const TYPERT = {
             kind: 'method',
             name: 'briefCoach',
             signature: 'briefCoach(request: BriefCoachRequest): Promise<BriefCoachResponse>',
-            summary: '根据第一问题干生成本题要点快照。',
-            jsDoc: '/** 同模型静默补全，只写进行中快照。 */',
+            summary: '根据第一问题干生成本题开卷卡。',
+            jsDoc: '/** 同模型静默补全，写出 Q1 待答卡。 */',
           },
           {
             kind: 'method',
             name: 'watchCoachTurn',
             signature: 'watchCoachTurn(request: WatchCoachTurnRequest): Promise<WatchCoachTurnResponse>',
-            summary: '看守考场下一问并刷新面板要点。',
-            jsDoc: '/** 题干变化后静默补全；不向对话 prompt。 */',
+            summary: '看守新待答问与新作答，追加或评分卡片。',
+            jsDoc: '/** 题干变化后追加开卷卡；新作答后写对照与五维。不向对话 prompt。 */',
+          },
+          {
+            kind: 'method',
+            name: 'loadDeck',
+            signature: 'loadDeck(request: LoadDeckRequest): Promise<LoadDeckResponse>',
+            summary: '从内存或工作区档案恢复本场甲板。',
+            jsDoc: '/** 重开面板时读回卡片；磁盘为真源。 */',
           },
         ],
         types: [],

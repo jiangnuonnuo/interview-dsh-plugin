@@ -31,6 +31,7 @@ describe('backend DSH adapter boundary', () => {
     expect(source).not.toMatch(/ctx\.agents/);
     expect(source).not.toMatch(/llm\.stream/);
     expect(source).not.toMatch(/agentDefaultModel/);
+    expect(source).not.toMatch(/from ['"]node:fs['"]/);
   });
 
   it('does not register sidebarRightTabs or header buttons', () => {
@@ -61,5 +62,17 @@ describe('backend DSH adapter boundary', () => {
       .map((file) => readFileSync(file, 'utf8'))
       .join('\n');
     expect(source).not.toMatch(/interviewerId/);
+  });
+
+  it('injects fs for workspace writes and never uses node:fs in the adapter', () => {
+    const adapter = readFileSync(join(srcRoot, 'infra/dsh/adapter.ts'), 'utf8');
+    const data = walk(join(srcRoot, 'data'))
+      .filter((file) => file.endsWith('.ts'))
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+    expect(adapter).toMatch(/inject = \['agents', 'llm', 'agentDefaultModel', 'fs'\]/);
+    expect(adapter).not.toMatch(/from ['"]node:fs['"]/);
+    expect(data).not.toMatch(/from ['"]node:fs['"]/);
+    expect(data).not.toMatch(/@deepseek-ai\//);
   });
 });

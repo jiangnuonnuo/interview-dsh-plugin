@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, act } from '@testing-library/react';
 import { CUSTOM_TOPIC_ID } from 'interview-dsh-shared';
 import { EntryPanel } from './EntryPanel';
 import { createMemoryEntryPort } from './memory-port';
@@ -6,7 +6,9 @@ import { examPanelState } from './exam-panel-state';
 
 describe('EntryPanel', () => {
   afterEach(() => {
-    examPanelState.set(null);
+    act(() => {
+      examPanelState.set(null);
+    });
   });
   it('defaults difficulty to 中级', () => {
     render(<EntryPanel port={createMemoryEntryPort()} />);

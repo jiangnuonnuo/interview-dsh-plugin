@@ -6,6 +6,8 @@ import type {
   BriefCoachRequest,
   BriefCoachResponse,
   GetEntryConfigResponse,
+  LoadDeckRequest,
+  LoadDeckResponse,
   WatchCoachTurnRequest,
   WatchCoachTurnResponse,
 } from 'interview-dsh-shared';
@@ -37,6 +39,7 @@ export interface InterviewRemote {
   attachInterviewer: (request: AttachInterviewerRequest) => Promise<unknown>;
   briefCoach: (request: BriefCoachRequest) => Promise<unknown>;
   watchCoachTurn: (request: WatchCoachTurnRequest) => Promise<unknown>;
+  loadDeck: (request: LoadDeckRequest) => Promise<unknown>;
 }
 
 export type SessionsProbe = ExamRoomSessions | undefined | (() => ExamRoomSessions | undefined);
@@ -73,6 +76,9 @@ export const createInterviewPort = (
     watchCoachTurn(request) {
       return unwrap(remote.watchCoachTurn(request) as Promise<WatchCoachTurnResponse>, 'watchCoachTurn');
     },
+    loadDeck(request) {
+      return unwrap(remote.loadDeck(request) as Promise<LoadDeckResponse>, 'loadDeck');
+    },
   };
 };
 
@@ -87,6 +93,9 @@ export const createUnavailableEntryPort = (reason: string): EntryPort => ({
     throw new Error(reason);
   },
   async watchCoachTurn() {
+    throw new Error(reason);
+  },
+  async loadDeck() {
     throw new Error(reason);
   },
 });

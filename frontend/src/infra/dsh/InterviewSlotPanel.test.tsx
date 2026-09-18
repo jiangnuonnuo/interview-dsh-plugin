@@ -2,7 +2,7 @@ import { act, createElement, type ComponentType } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { createMemoryEntryPort } from '../../features/entry/memory-port';
 import { examPanelState } from '../../features/entry/exam-panel-state';
-import { emptyBaguaScores, type InProgressSnapshot } from 'interview-dsh-shared';
+import { createInterviewDeck, createPendingCard } from 'interview-dsh-shared';
 import { entrySurface } from './entry-surface';
 import { apply, openInterviewTab, type ClientContext } from './index';
 import { InterviewSlotPanel } from './InterviewSlotPanel';
@@ -18,20 +18,27 @@ const baseCtx = (): ClientContext => ({
   inject: () => undefined,
 });
 
-const examSnapshot: InProgressSnapshot = {
-  phase: 'in_progress',
+const examDeck = createInterviewDeck({
   sessionId: 'session-exam',
   topic: 'MySQL 索引与优化',
   difficulty: 'mid',
-  questionBrief: '聚簇索引',
-  keyPoints: ['叶子存行'],
-  scores: emptyBaguaScores(),
-};
+  cards: [
+    createPendingCard({
+      id: 'Q1',
+      questionText: '聚簇索引',
+      questionBrief: '聚簇索引',
+      keyPoints: ['叶子存行'],
+    }),
+  ],
+  currentCardId: 'Q1',
+});
 
 describe('entrySurface', () => {
   afterEach(() => {
     entrySurface.close();
-    examPanelState.set(null);
+    act(() => {
+      examPanelState.set(null);
+    });
   });
 
   it('starts closed and toggles', () => {
@@ -46,7 +53,9 @@ describe('entrySurface', () => {
 describe('openInterviewTab', () => {
   afterEach(() => {
     entrySurface.close();
-    examPanelState.set(null);
+    act(() => {
+      examPanelState.set(null);
+    });
   });
 
   it('falls back to the slot overlay when official tabs were not registered', () => {
@@ -137,7 +146,7 @@ describe('openInterviewTab', () => {
 
   it('does not pin the exam session when the overlay closes', () => {
     const opened: string[] = [];
-    examPanelState.set(examSnapshot);
+    examPanelState.set(examDeck);
     entrySurface.open();
     openInterviewTab({
       ...baseCtx(),
@@ -160,7 +169,9 @@ describe('apply', () => {
     act(() => {
       entrySurface.close();
     });
-    examPanelState.set(null);
+    act(() => {
+      examPanelState.set(null);
+    });
   });
 
   it('still registers the input trigger when sidebarRightTabs inject is unavailable', async () => {
@@ -264,7 +275,9 @@ describe('InterviewSlotPanel', () => {
     act(() => {
       entrySurface.close();
     });
-    examPanelState.set(null);
+    act(() => {
+      examPanelState.set(null);
+    });
   });
 
   it('renders nothing while closed', () => {

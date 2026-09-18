@@ -1,14 +1,19 @@
 import {
   DIFFICULTY_LABELS,
   INTERVIEW_SESSION_ERROR_MESSAGES,
-  emptyBaguaScores,
+  createInterviewDeck,
+  createPendingCard,
   type BriefCoachRequest,
   type BriefCoachResponse,
+  type CardRelation,
   type Difficulty,
-  type InProgressSnapshot,
+  type InterviewDeck,
   type InterviewSessionErrorCode,
 } from 'interview-dsh-shared';
 import type { ExamSessionStore } from '../data/exam-session-store.js';
+import type { WorkspaceArchive } from '../data/workspace-archive.js';
+import { persistUnavailable, saveExamRecord } from '../data/workspace-archive.js';
+import { assignCardId } from './card-id.js';
 import { extractPendingQuestion } from './pending-question.js';
 
 export interface CoachBriefInput {
@@ -25,6 +30,8 @@ export interface CoachBriefParts {
 export interface ParsedCoachBrief {
   readonly questionBrief: string;
   readonly keyPoints: readonly string[];
+  readonly cardId?: string;
+  readonly relation?: CardRelation;
 }
 
 export type CoachQuestionFailure = {
@@ -54,8 +61,9 @@ export const assembleCoachBriefPrompt = ({
       '不要扮演面试官，不要向候选人发问，不要输出分数或通过/不通过判定。',
       '只针对当前待答问写摘要和要点；忽略同一段里对上一问的点评、纠正或揭晓。',
       '根据本场主题、难度和面试官已经问出的待答问，只返回一个 JSON 对象：',
-      '{"questionBrief":"题干摘要","keyPoints":["标准答要点1","标准答要点2"]}',
+      '{"questionBrief":"题干摘要","keyPoints":["标准答要点1","标准答要点2"],"cardId":"Q1","relation":"followup"}',
       'questionBrief 是本题题干的短摘要；keyPoints 是本题标准答要点，3 到 6 条。',
+      'cardId 必须是 Qn 或 Qn.m；relation 只能是 followup 或 next_topic。',
       '不要使用 Markdown 代码围栏，不要附加解释。',
     ].join('\n'),
     user: [
@@ -81,6 +89,9 @@ const extractJsonObject = (raw: string): string | null => {
   return fenced ? fenced[0] : null;
 };
 
+const asRelation = (value: unknown): CardRelation | undefined =>
+  value === 'followup' || value === 'next_topic' ? value : undefined;
+
 export const parseCoachBriefOutput = (raw: string): ParsedCoachBrief | null => {
   const json = extractJsonObject(raw);
   if (json === null) {
@@ -102,7 +113,14 @@ export const parseCoachBriefOutput = (raw: string): ParsedCoachBrief | null => {
     if (keyPoints.length === 0) {
       return null;
     }
-    return { questionBrief, keyPoints };
+    const cardId = asNonEmptyString(record.cardId) ?? undefined;
+    const relation = asRelation(record.relation);
+    return {
+      questionBrief,
+      keyPoints,
+      ...(cardId ? { cardId } : {}),
+      ...(relation ? { relation } : {}),
+    };
   } catch {
     return null;
   }
@@ -117,6 +135,9 @@ export interface CoachRuntime {
   readLatestQuestion(
     sessionId: string,
   ): Promise<{ ok: true; text: string } | CoachQuestionFailure>;
+  readLatestHuman(
+    sessionId: string,
+  ): Promise<{ ok: true; text: string } | CoachQuestionFailure>;
   awaitNewQuestion(
     sessionId: string,
     baselineText: string,
@@ -125,33 +146,40 @@ export interface CoachRuntime {
   complete(system: string, user: string): Promise<string | null>;
 }
 
-const coachUnavailable = (): BriefCoachResponse => ({
+const coachUnavailable = (deck?: InterviewDeck): BriefCoachResponse => ({
   ok: false,
   code: 'coach_unavailable',
   message: INTERVIEW_SESSION_ERROR_MESSAGES.coach_unavailable,
+  ...(deck ? { deck } : {}),
 });
 
-const buildSnapshot = (
-  request: BriefCoachRequest,
-  parsed: ParsedCoachBrief,
-): InProgressSnapshot => ({
-  phase: 'in_progress',
-  sessionId: request.sessionId,
-  topic: request.topic,
-  difficulty: request.difficulty,
-  questionBrief: parsed.questionBrief,
-  keyPoints: parsed.keyPoints,
-  scores: emptyBaguaScores(),
-});
+export const persistDeck = async (
+  archive: WorkspaceArchive | undefined,
+  deck: InterviewDeck,
+): Promise<BriefCoachResponse> => {
+  if (archive === undefined) {
+    return { ok: true, deck };
+  }
+  const written = await archive.writeDeck(deck);
+  if (!written.ok) {
+    return { ...persistUnavailable(), deck };
+  }
+  return { ok: true, deck: { ...deck, archiveDir: written.archiveDir } };
+};
 
 export const briefCoachSession = async (
   runtime: CoachRuntime,
   request: BriefCoachRequest,
   examSessions?: ExamSessionStore,
+  archive?: WorkspaceArchive,
 ): Promise<BriefCoachResponse> => {
   const question = await runtime.readLatestQuestion(request.sessionId);
   if (!question.ok) {
     return question;
+  }
+  const human = await runtime.readLatestHuman(request.sessionId);
+  if (!human.ok) {
+    return human;
   }
 
   const { system, user } = assembleCoachBriefPrompt({
@@ -169,14 +197,27 @@ export const briefCoachSession = async (
     return coachUnavailable();
   }
 
-  const snapshot = buildSnapshot(request, parsed);
-  examSessions?.save({
+  const card = createPendingCard({
+    id: assignCardId([], { suggestedId: 'Q1' }),
+    questionText: question.text,
+    questionBrief: parsed.questionBrief,
+    keyPoints: parsed.keyPoints,
+    seedUserText: human.text,
+  });
+  const deck = createInterviewDeck({
     sessionId: request.sessionId,
     topic: request.topic,
     difficulty: request.difficulty,
-    lastQuestionText: question.text,
-    snapshot,
+    cards: [card],
+    currentCardId: card.id,
   });
+  examSessions && saveExamRecord(examSessions, deck, question.text);
 
-  return { ok: true, snapshot };
+  const persisted = await persistDeck(archive, deck);
+  if (persisted.ok) {
+    examSessions && saveExamRecord(examSessions, persisted.deck, question.text);
+  } else if (examSessions) {
+    saveExamRecord(examSessions, persisted.deck ?? deck, question.text);
+  }
+  return persisted;
 };

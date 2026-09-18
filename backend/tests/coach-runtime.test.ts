@@ -432,4 +432,87 @@ describe('createHostCoachRuntime', () => {
       text: pending,
     });
   });
+
+  it('reads the opening seed then the later human answer', async () => {
+    const events = [
+      {
+        type: 'user/message',
+        data: {
+          role: 'user',
+          content: [{ type: 'text', text: '开始本场八股专项模拟面试。请按人设先说明主题与难度，然后只问第一个问题。' }],
+          source: { kind: 'user' },
+        },
+      },
+      {
+        type: 'assistant/message',
+        data: {
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: '请说明 InnoDB 聚簇索引和二级索引的区别。' }],
+            source: { kind: 'model' },
+          },
+        },
+      },
+    ];
+    const runtime = createHostCoachRuntime({
+      agents: {
+        get: () => ({
+          whenIdle: async () => undefined,
+          status: 'idle',
+          session: { events },
+        }),
+      },
+    });
+    await expect(runtime.readLatestHuman('session-exam')).resolves.toEqual({
+      ok: true,
+      text: '开始本场八股专项模拟面试。请按人设先说明主题与难度，然后只问第一个问题。',
+    });
+    events.push({
+      type: 'user/message',
+      data: {
+        role: 'user',
+        content: [{ type: 'text', text: '叶子节点存行。' }],
+        source: { kind: 'user' },
+      },
+    });
+    await expect(runtime.readLatestHuman('session-exam')).resolves.toEqual({
+      ok: true,
+      text: '叶子节点存行。',
+    });
+  });
+
+  it('skips plugin-sourced user text when reading the latest human', async () => {
+    const runtime = createHostCoachRuntime({
+      agents: {
+        get: () => ({
+          whenIdle: async () => undefined,
+          status: 'idle',
+          session: {
+            events: [
+              {
+                type: 'user/message',
+                data: {
+                  role: 'user',
+                  content: [{ type: 'text', text: '插件催问' }],
+                  source: { kind: 'plugin' },
+                },
+              },
+              {
+                type: 'user/message',
+                data: {
+                  role: 'user',
+                  content: [{ type: 'text', text: '叶子节点存行。' }],
+                  source: { kind: 'user' },
+                },
+              },
+            ],
+          },
+        }),
+      },
+    });
+    await expect(runtime.readLatestHuman('session-exam')).resolves.toEqual({
+      ok: true,
+      text: '叶子节点存行。',
+    });
+  });
 });

@@ -1,11 +1,11 @@
-import type { Difficulty, InProgressSnapshot } from 'interview-dsh-shared';
+import type { Difficulty, InterviewDeck } from 'interview-dsh-shared';
 
 export interface ExamSessionRecord {
   readonly sessionId: string;
   readonly topic: string;
   readonly difficulty: Difficulty;
   readonly lastQuestionText: string;
-  readonly snapshot: InProgressSnapshot;
+  readonly deck: InterviewDeck;
 }
 
 export interface ExamSessionStore {

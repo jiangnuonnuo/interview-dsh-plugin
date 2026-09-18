@@ -8,6 +8,7 @@ import {
   briefCoachSession,
   parseCoachBriefOutput,
 } from '../src/services/coach-brief.js';
+import { stubCoach } from './coach-stub.js';
 
 const topic = 'MySQL 索引与优化';
 const difficulty = 'mid' as const;
@@ -25,6 +26,7 @@ describe('assembleCoachBriefPrompt', () => {
     expect(system).toContain('标准答要点');
     expect(system).toMatch(/questionBrief/);
     expect(system).toMatch(/keyPoints/);
+    expect(system).toMatch(/cardId/);
     expect(user).toContain(topic);
     expect(user).toContain('中级');
     expect(user).toContain(questionText);
@@ -70,6 +72,18 @@ describe('parseCoachBriefOutput', () => {
     });
   });
 
+  it('reads optional cardId and relation', () => {
+    const parsed = parseCoachBriefOutput(
+      '{"questionBrief":"回表","keyPoints":["先查二级"],"cardId":"Q1.1","relation":"followup"}',
+    );
+    expect(parsed).toEqual({
+      questionBrief: '回表',
+      keyPoints: ['先查二级'],
+      cardId: 'Q1.1',
+      relation: 'followup',
+    });
+  });
+
   it('returns null when the model does not produce the structured brief', () => {
     expect(parseCoachBriefOutput('面试官第一问：什么是 B+ 树？')).toBeNull();
   });
@@ -86,18 +100,21 @@ describe('briefCoachSession', () => {
     });
 
     const result = await briefCoachSession(
-      {
+      stubCoach({
         readLatestQuestion: async () => ({ ok: true, text: questionText }),
-        awaitNewQuestion: async () => ({ ok: true as const, status: 'unchanged' as const }),
         complete,
-      },
+      }),
       { sessionId: 'session-exam', topic, difficulty },
     );
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.snapshot.questionBrief).toBe('聚簇 vs 二级索引');
-      expect(result.snapshot.scores.every((item) => item.score === null)).toBe(true);
+      expect(result.deck.cards).toHaveLength(1);
+      expect(result.deck.cards[0]?.id).toBe('Q1');
+      expect(result.deck.currentCardId).toBe('Q1');
+      expect(result.deck.cards[0]?.questionBrief).toBe('聚簇 vs 二级索引');
+      expect(result.deck.cards[0]?.status).toBe('pending');
+      expect(result.deck.cards[0]?.scores.every((item) => item.score === null)).toBe(true);
     }
     expect(complete).toHaveBeenCalledTimes(1);
     expect(installPersona).not.toHaveBeenCalled();
@@ -107,16 +124,19 @@ describe('briefCoachSession', () => {
     const { createExamSessionStore } = await import('../src/data/exam-session-store.js');
     const examSessions = createExamSessionStore();
     const result = await briefCoachSession(
-      {
+      stubCoach({
         readLatestQuestion: async () => ({ ok: true, text: questionText }),
-        awaitNewQuestion: async () => ({ ok: true as const, status: 'unchanged' as const }),
+        readLatestHuman: async () => ({ ok: true, text: '开始本场八股专项模拟面试。' }),
         complete: async () => '{"questionBrief":"聚簇 vs 二级索引","keyPoints":["回表"]}',
-      },
+      }),
       { sessionId: 'session-exam', topic, difficulty },
       examSessions,
     );
     expect(result.ok).toBe(true);
     expect(examSessions.load('session-exam')?.lastQuestionText).toBe(questionText);
-    expect(examSessions.load('session-exam')?.snapshot.questionBrief).toBe('聚簇 vs 二级索引');
+    expect(examSessions.load('session-exam')?.deck.cards[0]?.questionBrief).toBe('聚簇 vs 二级索引');
+    expect(examSessions.load('session-exam')?.deck.cards[0]?.seedUserText).toBe(
+      '开始本场八股专项模拟面试。',
+    );
   });
 });

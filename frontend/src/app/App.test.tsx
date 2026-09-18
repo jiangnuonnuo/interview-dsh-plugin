@@ -1,11 +1,13 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import { App } from './App';
 import { createMemoryEntryPort } from '../features/entry/memory-port';
 import { examPanelState } from '../features/entry/exam-panel-state';
 
 describe('App', () => {
   afterEach(() => {
-    examPanelState.set(null);
+    act(() => {
+      examPanelState.set(null);
+    });
   });
   it('only mounts the entry panel', () => {
     render(<App port={createMemoryEntryPort()} />);

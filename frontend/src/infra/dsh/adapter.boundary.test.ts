@@ -46,6 +46,16 @@ describe('frontend DSH adapter boundary', () => {
     expect(source).not.toMatch(/from ['"]\.\.\/infra\/dsh/);
   });
 
+  it('does not write score fields in feature source', () => {
+    const featuresDir = join(process.cwd(), 'src/features');
+    const source = walk(featuresDir)
+      .filter((file) => /\.(ts|tsx)$/.test(file) && !file.includes('.test.'))
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+    expect(source).not.toMatch(/score:\s*[0-9]/);
+    expect(source).not.toMatch(/status:\s*['"]scored['"]/);
+  });
+
   it('registers the trigger on conversation.input.right, not the session header', () => {
     const adapterDir = join(process.cwd(), 'src/infra/dsh');
     const source = walk(adapterDir)

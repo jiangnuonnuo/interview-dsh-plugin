@@ -1,4 +1,4 @@
-import { INTERVIEW_SESSION_ERROR_MESSAGES, emptyBaguaScores } from 'interview-dsh-shared';
+import { INTERVIEW_SESSION_ERROR_MESSAGES, createInterviewDeck, createPendingCard } from 'interview-dsh-shared';
 import { createInterviewPort } from './remote-port';
 import type { ExamRoomSessions } from './start-exam-room';
 
@@ -8,15 +8,20 @@ const mysqlRequest = {
   difficulty: 'mid' as const,
 };
 
-const snapshot = {
-  phase: 'in_progress' as const,
+const deck = createInterviewDeck({
   sessionId: 'session-exam',
   topic: 'MySQL 索引与优化',
-  difficulty: 'mid' as const,
-  questionBrief: '聚簇 vs 二级索引',
-  keyPoints: ['回表'],
-  scores: emptyBaguaScores(),
-};
+  difficulty: 'mid',
+  cards: [
+    createPendingCard({
+      id: 'Q1',
+      questionText: '聚簇 vs 二级索引',
+      questionBrief: '聚簇 vs 二级索引',
+      keyPoints: ['回表'],
+    }),
+  ],
+  currentCardId: 'Q1',
+});
 
 describe('createInterviewPort', () => {
   it('resolves sessions at start time, not construction time', async () => {
@@ -33,8 +38,9 @@ describe('createInterviewPort', () => {
       })),
       getEntryConfig: jest.fn(),
       attachInterviewer: jest.fn(async () => ({ ok: true as const })),
-      briefCoach: jest.fn(async () => ({ ok: true as const, snapshot })),
+      briefCoach: jest.fn(async () => ({ ok: true as const, deck })),
       watchCoachTurn: jest.fn(),
+      loadDeck: jest.fn(),
     };
     const port = createInterviewPort(remote, () => sessions);
 
@@ -58,10 +64,16 @@ describe('createInterviewPort', () => {
         };
       },
       open: jest.fn(),
+      list: {
+        getSnapshot: () => ({
+          current: 'current-chat',
+          byId: { 'current-chat': { cwd: '/Users/jiang/workspace' } },
+        }),
+      },
     };
 
     const started = await port.startInterview(mysqlRequest);
-    expect(started).toEqual({ ok: true, snapshot });
+    expect(started).toEqual({ ok: true, deck });
     expect(sessions.open).toHaveBeenCalledWith('session-exam');
   });
 });

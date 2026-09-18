@@ -2,10 +2,10 @@
  * @jest-environment node
  */
 
+import { createInterviewDeck, createPendingCard } from 'interview-dsh-shared';
 import { createEntryConfigStore } from '../src/data/entry-config-store.js';
 import { createInterviewEntryService } from '../src/services/interview-entry.service.js';
 import { startInterviewSession } from '../src/services/start-interview.js';
-import { emptyBaguaScores } from 'interview-dsh-shared';
 
 const mysqlRequest = {
   topicId: 'mysql',
@@ -13,15 +13,20 @@ const mysqlRequest = {
   difficulty: 'mid' as const,
 };
 
-const snapshot = {
-  phase: 'in_progress' as const,
+const deck = createInterviewDeck({
   sessionId: 'session-exam',
   topic: 'MySQL 索引与优化',
-  difficulty: 'mid' as const,
-  questionBrief: '聚簇 vs 二级索引',
-  keyPoints: ['聚簇索引叶子即行'],
-  scores: emptyBaguaScores(),
-};
+  difficulty: 'mid',
+  cards: [
+    createPendingCard({
+      id: 'Q1',
+      questionText: '请说明聚簇索引。',
+      questionBrief: '聚簇 vs 二级索引',
+      keyPoints: ['聚簇索引叶子即行'],
+    }),
+  ],
+  currentCardId: 'Q1',
+});
 
 describe('startInterviewSession', () => {
   it('does not start A/B when entry validation fails', async () => {
@@ -74,7 +79,7 @@ describe('startInterviewSession', () => {
     }));
     const briefCoach = jest.fn(async () => ({
       ok: true as const,
-      snapshot,
+      deck,
     }));
 
     const result = await startInterviewSession(
@@ -83,7 +88,7 @@ describe('startInterviewSession', () => {
       mysqlRequest,
     );
 
-    expect(result).toEqual({ ok: true, snapshot });
+    expect(result).toEqual({ ok: true, deck });
     expect(startExam).toHaveBeenCalledWith({
       topic: 'MySQL 索引与优化',
       difficulty: 'mid',

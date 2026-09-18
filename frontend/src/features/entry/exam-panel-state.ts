@@ -1,8 +1,8 @@
-import type { InProgressSnapshot } from 'interview-dsh-shared';
+import type { InterviewDeck } from 'interview-dsh-shared';
 
 const listeners = new Set<() => void>();
 
-let snapshot: InProgressSnapshot | null = null;
+let deck: InterviewDeck | null = null;
 
 const notify = (): void => {
   for (const listener of listeners) {
@@ -11,15 +11,15 @@ const notify = (): void => {
 };
 
 /**
- * Overlay 关闭会卸载 EntryPanel；本场快照留在模块里，重开「面试」才能继续看守。
- * 「结束本场」必须清掉这份快照，否则入口被锁死，也无法再开一轮。
+ * Overlay 关闭会卸载 EntryPanel；本场甲板留在模块里，重开「面试」才能继续看守。
+ * Host 可用时优先 loadDeck 读盘覆盖；「结束本场」必须清掉这份甲板。
  */
 export const examPanelState = {
-  get(): InProgressSnapshot | null {
-    return snapshot;
+  get(): InterviewDeck | null {
+    return deck;
   },
-  set(next: InProgressSnapshot | null): void {
-    snapshot = next;
+  set(next: InterviewDeck | null): void {
+    deck = next;
     notify();
   },
   subscribe(listener: () => void): () => void {

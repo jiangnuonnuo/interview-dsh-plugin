@@ -5,6 +5,7 @@ import type {
   CoachQuestionFailure,
   CoachRuntime,
 } from '../../services/coach-brief.js';
+import { isHumanUserItem, latestHumanText, visibleTextFromContent } from '../../services/human-answer.js';
 import { extractPendingQuestion } from '../../services/pending-question.js';
 
 const PLUGIN_ID = 'interview-dsh';
@@ -71,43 +72,6 @@ const sourceKind = (item: unknown): string | undefined => {
   return record.source?.kind ?? record.data?.source?.kind ?? record.data?.message?.source?.kind;
 };
 
-const isHumanUser = (item: unknown): boolean => {
-  if (item === null || typeof item !== 'object') {
-    return false;
-  }
-  const kind = sourceKind(item);
-  if (kind === 'tool' || kind === 'plugin') {
-    return false;
-  }
-  const record = item as { role?: string; type?: string };
-  return record.role === 'user' || record.type === 'user/message';
-};
-
-const visibleTextFromContent = (content: unknown): string => {
-  if (typeof content === 'string') {
-    return content.trim();
-  }
-  if (!Array.isArray(content)) {
-    return '';
-  }
-  return content
-    .map((block) => {
-      if (block === null || typeof block !== 'object') {
-        return '';
-      }
-      const record = block as { type?: string; text?: unknown };
-      if (record.type === 'reasoning') {
-        return '';
-      }
-      if (typeof record.text === 'string') {
-        return record.text;
-      }
-      return '';
-    })
-    .join('')
-    .trim();
-};
-
 const assistantMessageText = (item: unknown): string => {
   if (item === null || typeof item !== 'object' || sourceKind(item) === 'plugin') {
     return '';
@@ -146,7 +110,7 @@ const chunkDelta = (item: unknown): string => {
 const currentQuestionText = (items: readonly unknown[]): string => {
   let lastHuman = -1;
   for (let index = 0; index < items.length; index += 1) {
-    if (isHumanUser(items[index])) {
+    if (isHumanUserItem(items[index])) {
       lastHuman = index;
     }
   }
@@ -200,6 +164,26 @@ const readCurrentQuestion = (session: CoachHostSession): string => {
   }
   for (const items of sources) {
     const text = currentQuestionText(items);
+    if (text.length > 0) {
+      return text;
+    }
+  }
+  return '';
+};
+
+const readCurrentHuman = (session: CoachHostSession): string => {
+  const sources: Array<readonly unknown[]> = [];
+  if (Array.isArray(session.events) && session.events.length > 0) {
+    sources.push(session.events);
+  }
+  if (typeof session.snapshotEvents === 'function') {
+    sources.push(session.snapshotEvents());
+  }
+  if (typeof session.deriveMessages === 'function') {
+    sources.push(session.deriveMessages());
+  }
+  for (const items of sources) {
+    const text = latestHumanText(items);
     if (text.length > 0) {
       return text;
     }
@@ -275,6 +259,20 @@ export const createHostCoachRuntime = (
         return { ok: true, text };
       }
       return firstQuestionFailed();
+    } catch {
+      return firstQuestionFailed();
+    }
+  },
+  async readLatestHuman(sessionId) {
+    const agent = asCoachAgent(ctx.agents?.get(sessionId));
+    if (agent === undefined) {
+      return injectUnavailable();
+    }
+    if (!hasQuestionLogReader(agent.session)) {
+      return { ok: true, text: '' };
+    }
+    try {
+      return { ok: true, text: readCurrentHuman(agent.session) };
     } catch {
       return firstQuestionFailed();
     }

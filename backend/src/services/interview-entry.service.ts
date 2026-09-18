@@ -13,11 +13,14 @@ import {
   type EntryConfig,
   type EntryErrorCode,
   type GetEntryConfigResponse,
+  type LoadDeckRequest,
+  type LoadDeckResponse,
   type WatchCoachTurnRequest,
   type WatchCoachTurnResponse,
 } from 'interview-dsh-shared';
 import type { EntryConfigStore } from '../data/entry-config-store.js';
 import { createExamSessionStore, type ExamSessionStore } from '../data/exam-session-store.js';
+import { loadDeckSession, type WorkspaceArchive } from '../data/workspace-archive.js';
 import { briefCoachSession, type CoachRuntime } from './coach-brief.js';
 import { assembleInterviewerPersona } from './interviewer-persona.js';
 import { watchCoachTurnSession } from './watch-coach-turn.js';
@@ -32,6 +35,7 @@ export interface InterviewEntryService {
   attachInterviewer(request: AttachInterviewerRequest): AttachInterviewerResponse;
   briefCoach(request: BriefCoachRequest): Promise<BriefCoachResponse>;
   watchCoachTurn(request: WatchCoachTurnRequest): Promise<WatchCoachTurnResponse>;
+  loadDeck(request: LoadDeckRequest): Promise<LoadDeckResponse>;
 }
 
 const failure = (code: EntryErrorCode): AcceptEntryConfigResponse => ({
@@ -59,6 +63,7 @@ const unavailableCoach: CoachRuntime = {
     code: 'follow_up_failed',
     message: INTERVIEW_SESSION_ERROR_MESSAGES.follow_up_failed,
   }),
+  readLatestHuman: async () => ({ ok: true, text: '' }),
   complete: async () => null,
 };
 
@@ -67,6 +72,7 @@ export const createInterviewEntryService = (
   persona: InterviewerPersonaInstaller = unavailablePersona,
   coach: CoachRuntime = unavailableCoach,
   examSessions: ExamSessionStore = createExamSessionStore(),
+  archive?: WorkspaceArchive,
 ): InterviewEntryService => ({
   acceptEntryConfig(request) {
     if (!isDifficulty(request.difficulty)) {
@@ -117,9 +123,12 @@ export const createInterviewEntryService = (
     return persona.install(request.sessionId, text);
   },
   briefCoach(request) {
-    return briefCoachSession(coach, request, examSessions);
+    return briefCoachSession(coach, request, examSessions, archive);
   },
   watchCoachTurn(request) {
-    return watchCoachTurnSession(coach, examSessions, request);
+    return watchCoachTurnSession(coach, examSessions, request, {}, archive);
+  },
+  loadDeck(request) {
+    return loadDeckSession(examSessions, request, archive);
   },
 });

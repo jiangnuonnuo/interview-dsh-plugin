@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import {
-  emptyBaguaScores,
   INTERVIEW_SESSION_ERROR_MESSAGES,
-  type InProgressSnapshot,
+  createInterviewDeck,
+  createPendingCard,
   type WatchCoachTurnRequest,
   type WatchCoachTurnResponse,
 } from 'interview-dsh-shared';
@@ -11,23 +11,37 @@ import { createMemoryEntryPort } from './memory-port';
 import type { EntryPort } from './entry-port';
 import { examPanelState } from './exam-panel-state';
 
-const firstSnapshot: InProgressSnapshot = {
-  phase: 'in_progress',
+const firstCard = createPendingCard({
+  id: 'Q1',
+  questionText: '请说明聚簇索引。',
+  questionBrief: '聚簇索引和二级索引的区别',
+  keyPoints: ['聚簇索引叶子即行'],
+});
+
+const firstDeck = createInterviewDeck({
   sessionId: 'session-exam',
   topic: 'MySQL 索引与优化',
   difficulty: 'mid',
-  questionBrief: '聚簇索引和二级索引的区别',
-  keyPoints: ['聚簇索引叶子即行'],
-  scores: emptyBaguaScores(),
-};
+  cards: [firstCard],
+  currentCardId: 'Q1',
+});
 
-const nextSnapshot: InProgressSnapshot = {
-  ...firstSnapshot,
+const nextCard = createPendingCard({
+  id: 'Q2',
+  questionText: '二级索引如何回表？',
   questionBrief: '二级索引如何回表',
   keyPoints: ['先查二级再回聚簇'],
-};
+});
 
-const createDeferredWatchPort = () => {
+const nextDeck = createInterviewDeck({
+  sessionId: 'session-exam',
+  topic: 'MySQL 索引与优化',
+  difficulty: 'mid',
+  cards: [firstCard, nextCard],
+  currentCardId: 'Q2',
+});
+
+const createDeferredWatchPort = (loadDeck = async () => ({ ok: true as const, deck: firstDeck })) => {
   const pending: Array<{
     request: WatchCoachTurnRequest;
     resolve: (value: WatchCoachTurnResponse) => void;
@@ -37,7 +51,7 @@ const createDeferredWatchPort = () => {
   const port: EntryPort = {
     ...memory,
     async startInterview() {
-      return { ok: true, snapshot: firstSnapshot };
+      return { ok: true, deck: firstDeck };
     },
     watchCoachTurn(request) {
       requests.push(request);
@@ -45,6 +59,7 @@ const createDeferredWatchPort = () => {
         pending.push({ request, resolve });
       });
     },
+    loadDeck,
   };
   return {
     port,
@@ -78,42 +93,57 @@ const startExam = async (port: EntryPort) => {
 
 describe('EntryPanel watchCoachTurn', () => {
   afterEach(() => {
-    examPanelState.set(null);
+    act(() => {
+      examPanelState.set(null);
+    });
   });
-  it('replaces the brief and key points when a later turn arrives', async () => {
+  it('shows the new card and keeps Q1 reachable', async () => {
     const { port, resolve } = createDeferredWatchPort();
     await startExam(port);
     expect(screen.getByText('聚簇索引和二级索引的区别')).toBeDefined();
 
     await act(async () => {
-      resolve({ ok: true, status: 'updated', snapshot: nextSnapshot });
+      resolve({ ok: true, status: 'updated', deck: nextDeck });
     });
 
     await waitFor(() => {
       expect(screen.getByText('二级索引如何回表')).toBeDefined();
     });
     expect(screen.getByText('先查二级再回聚簇')).toBeDefined();
-    expect(screen.queryByText('聚簇索引和二级索引的区别')).toBeNull();
+    expect(screen.getByTestId('card-id').textContent).toBe('Q2');
+    fireEvent.click(screen.getByTestId('prev-card'));
+    expect(screen.getByText('聚簇索引和二级索引的区别')).toBeDefined();
+    expect(screen.getByTestId('card-id').textContent).toBe('Q1');
 
-    const thirdSnapshot: InProgressSnapshot = {
-      ...nextSnapshot,
-      questionBrief: 'Redisson看门狗续期',
-      keyPoints: ['客户端续期而不是服务端TTL'],
-    };
+    const thirdDeck = createInterviewDeck({
+      sessionId: 'session-exam',
+      topic: 'MySQL 索引与优化',
+      difficulty: 'mid',
+      cards: [
+        firstCard,
+        nextCard,
+        createPendingCard({
+          id: 'Q3',
+          questionText: 'Redisson 看门狗',
+          questionBrief: 'Redisson看门狗续期',
+          keyPoints: ['客户端续期而不是服务端TTL'],
+        }),
+      ],
+      currentCardId: 'Q3',
+    });
     await act(async () => {
-      resolve({ ok: true, status: 'updated', snapshot: thirdSnapshot });
+      resolve({ ok: true, status: 'updated', deck: thirdDeck });
     });
     await waitFor(() => {
       expect(screen.getByText('Redisson看门狗续期')).toBeDefined();
     });
-    expect(screen.getByText('客户端续期而不是服务端TTL')).toBeDefined();
-    expect(screen.queryByText('二级索引如何回表')).toBeNull();
+    expect(screen.getByTestId('card-id').textContent).toBe('Q3');
     const scores = screen.getByTestId('score-placeholders');
     expect(scores.textContent).toMatch(/—/);
     expect(scores.textContent).not.toMatch(/\d/);
   });
 
-  it('keeps the previous snapshot when refresh fails', async () => {
+  it('keeps the previous deck when refresh fails', async () => {
     const { port, resolve } = createDeferredWatchPort();
     await startExam(port);
 
@@ -143,36 +173,26 @@ describe('EntryPanel watchCoachTurn', () => {
 
     view.unmount();
     await act(async () => {
-      resolve({ ok: true, status: 'updated', snapshot: nextSnapshot });
+      resolve({ ok: true, status: 'updated', deck: nextDeck });
     });
 
     expect(screen.queryByText('二级索引如何回表')).toBeNull();
   });
 
-  it('restores the in-progress snapshot after the overlay unmounts', async () => {
-    const { port, resolve } = createDeferredWatchPort();
-    const first = render(<EntryPanel port={port} />);
-    fireEvent.click(screen.getByRole('button', { name: /MySQL 索引与优化/ }));
-    fireEvent.click(screen.getByRole('button', { name: '开始模拟面试' }));
+  it('restores two cards after the overlay unmounts', async () => {
+    examPanelState.set(nextDeck);
+    const { port } = createDeferredWatchPort(async () => ({ ok: true as const, deck: nextDeck }));
+    render(<EntryPanel port={port} />);
     await waitFor(() => {
       expect(screen.getByTestId('interview-in-progress')).toBeDefined();
     });
-    first.unmount();
-    render(<EntryPanel port={port} />);
-    expect(screen.getByTestId('interview-in-progress')).toBeDefined();
+    expect(screen.getByTestId('card-id').textContent).toBe('Q2');
+    fireEvent.click(screen.getByTestId('prev-card'));
+    expect(screen.getByTestId('card-id').textContent).toBe('Q1');
     expect(screen.getByText('聚簇索引和二级索引的区别')).toBeDefined();
-    await act(async () => {
-      resolve({ ok: true, status: 'unchanged' });
-    });
-    await act(async () => {
-      resolve({ ok: true, status: 'updated', snapshot: nextSnapshot });
-    });
-    await waitFor(() => {
-      expect(screen.getByText('二级索引如何回表')).toBeDefined();
-    });
   });
 
-  it('force-refreshes the current question when 刷新本题 is clicked', async () => {
+  it('force-refreshes the current pending card when 刷新本题 is clicked', async () => {
     const { port, requests, resolveForce } = createDeferredWatchPort();
     await startExam(port);
     fireEvent.click(screen.getByTestId('refresh-coach'));
@@ -182,21 +202,34 @@ describe('EntryPanel watchCoachTurn', () => {
     expect(screen.getByTestId('refresh-coach')).toHaveProperty('disabled', true);
     expect(screen.getByTestId('refresh-coach').textContent).toBe('刷新中');
 
+    const refreshed = createInterviewDeck({
+      sessionId: 'session-exam',
+      topic: 'MySQL 索引与优化',
+      difficulty: 'mid',
+      cards: [
+        {
+          ...firstCard,
+          questionBrief: '二级索引如何回表',
+          keyPoints: ['先查二级再回聚簇'],
+        },
+      ],
+      currentCardId: 'Q1',
+    });
     await act(async () => {
-      resolveForce({ ok: true, status: 'updated', snapshot: nextSnapshot });
+      resolveForce({ ok: true, status: 'updated', deck: refreshed });
     });
 
     await waitFor(() => {
       expect(screen.getByText('二级索引如何回表')).toBeDefined();
     });
+    expect(screen.getByTestId('card-id').textContent).toBe('Q1');
     expect(screen.getByText('先查二级再回聚簇')).toBeDefined();
-    expect(screen.queryByText('聚簇索引和二级索引的区别')).toBeNull();
     expect(screen.getByTestId('refresh-coach').textContent).toBe('刷新本题');
     expect(screen.queryByRole('log')).toBeNull();
     expect(screen.queryByPlaceholderText(/发消息|输入消息|聊天/)).toBeNull();
   });
 
-  it('keeps the previous snapshot when force refresh fails', async () => {
+  it('keeps the previous deck when force refresh fails', async () => {
     const { port, resolveForce } = createDeferredWatchPort();
     await startExam(port);
     fireEvent.click(screen.getByTestId('refresh-coach'));
@@ -225,7 +258,7 @@ describe('EntryPanel watchCoachTurn', () => {
     fireEvent.click(screen.getByTestId('refresh-coach'));
     view.unmount();
     await act(async () => {
-      resolveForce({ ok: true, status: 'updated', snapshot: nextSnapshot });
+      resolveForce({ ok: true, status: 'updated', deck: nextDeck });
     });
     expect(screen.queryByText('二级索引如何回表')).toBeNull();
   });
@@ -241,7 +274,7 @@ describe('EntryPanel watchCoachTurn', () => {
 });
 
 describe('memory watchCoachTurn', () => {
-  it('returns an updated snapshot on the second call', async () => {
+  it('returns an updated deck on the second call', async () => {
     const port = createMemoryEntryPort();
     await port.startInterview({ topicId: 'mysql', customTopic: '', difficulty: 'mid' });
     const first = await port.watchCoachTurn({ sessionId: 'memory-session' });
@@ -249,8 +282,8 @@ describe('memory watchCoachTurn', () => {
     const second = await port.watchCoachTurn({ sessionId: 'memory-session' });
     expect(second.ok).toBe(true);
     if (second.ok && second.status === 'updated') {
-      expect(second.snapshot.questionBrief).toMatch(/下一问摘要/);
-      expect(second.snapshot.scores).toEqual(emptyBaguaScores());
+      expect(second.deck.cards).toHaveLength(2);
+      expect(second.deck.cards[1]?.questionBrief).toMatch(/下一问摘要/);
     }
   });
 
@@ -260,7 +293,7 @@ describe('memory watchCoachTurn', () => {
     const forced = await port.watchCoachTurn({ sessionId: 'memory-session', force: true });
     expect(forced.ok).toBe(true);
     if (forced.ok && forced.status === 'updated') {
-      expect(forced.snapshot.questionBrief).toMatch(/强制刷新摘要/);
+      expect(forced.deck.cards[0]?.questionBrief).toMatch(/强制刷新摘要/);
     }
   });
 });

@@ -119,7 +119,7 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
   const [customTopic, setCustomTopic] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty>(DEFAULT_DIFFICULTY);
   const [error, setError] = useState<string | null>(null);
-  const snapshot = useSyncExternalStore(
+  const deck = useSyncExternalStore(
     examPanelState.subscribe,
     examPanelState.get,
     examPanelState.get,
@@ -161,18 +161,54 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
   }, [port]);
 
   useEffect(() => {
-    if (snapshot === null) {
+    const cached = examPanelState.get();
+    if (cached === null) {
+      return;
+    }
+    let cancelled = false;
+    void port
+      .loadDeck({ sessionId: cached.sessionId })
+      .then((result) => {
+        if (cancelled || !aliveRef.current) {
+          return;
+        }
+        if (result.ok) {
+          examPanelState.set(result.deck);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [port]);
+
+  useEffect(() => {
+    if (deck === null) {
       return;
     }
     onExamLive?.();
-  }, [onExamLive, snapshot?.sessionId]);
+  }, [onExamLive, deck?.sessionId]);
 
   useEffect(() => {
-    if (snapshot === null) {
+    if (deck === null) {
       return;
     }
-    const sessionId = snapshot.sessionId;
+    const sessionId = deck.sessionId;
     let cancelled = false;
+    const applyWatch = (result: Awaited<ReturnType<EntryPort['watchCoachTurn']>>) => {
+      if (!result.ok) {
+        if (result.deck) {
+          examPanelState.set(result.deck);
+        }
+        setWatchError(result.message);
+        return false;
+      }
+      if (result.status === 'updated') {
+        setWatchError(null);
+        examPanelState.set(result.deck);
+      }
+      return true;
+    };
     const run = async () => {
       while (!cancelled) {
         try {
@@ -180,8 +216,7 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
           if (cancelled) {
             return;
           }
-          if (!result.ok) {
-            setWatchError(result.message);
+          if (!applyWatch(result)) {
             await new Promise((resolve) => {
               setTimeout(resolve, 1000);
             });
@@ -189,10 +224,6 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
               return;
             }
             continue;
-          }
-          if (result.status === 'updated') {
-            setWatchError(null);
-            examPanelState.set(result.snapshot);
           }
         } catch (cause: unknown) {
           if (cancelled) {
@@ -209,13 +240,13 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
     return () => {
       cancelled = true;
     };
-  }, [port, snapshot?.sessionId]);
+  }, [port, deck?.sessionId]);
 
   const refreshCoach = async () => {
-    if (snapshot === null || refreshing) {
+    if (deck === null || refreshing) {
       return;
     }
-    const sessionId = snapshot.sessionId;
+    const sessionId = deck.sessionId;
     setRefreshing(true);
     try {
       const result = await port.watchCoachTurn({ sessionId, force: true });
@@ -223,12 +254,15 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
         return;
       }
       if (!result.ok) {
+        if (result.deck) {
+          examPanelState.set(result.deck);
+        }
         setWatchError(result.message);
         return;
       }
       if (result.status === 'updated') {
         setWatchError(null);
-        examPanelState.set(result.snapshot);
+        examPanelState.set(result.deck);
       }
     } catch (cause: unknown) {
       if (!aliveRef.current) {
@@ -260,12 +294,17 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
         difficulty,
       });
       if (!result.ok) {
+        if (result.deck) {
+          examPanelState.set(result.deck);
+          setWatchError(result.message);
+          return;
+        }
         setError(result.message);
         examPanelState.set(null);
         return;
       }
       setWatchError(null);
-      examPanelState.set(result.snapshot);
+      examPanelState.set(result.deck);
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -273,10 +312,10 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
     }
   };
 
-  if (snapshot) {
+  if (deck) {
     return (
       <InProgressPanel
-        snapshot={snapshot}
+        deck={deck}
         error={watchError}
         onClose={onClose}
         onRefresh={() => {

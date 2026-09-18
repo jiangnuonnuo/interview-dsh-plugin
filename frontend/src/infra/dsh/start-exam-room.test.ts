@@ -1,7 +1,17 @@
-import { INTERVIEW_OPENING_PROMPT } from 'interview-dsh-shared';
+import { INTERVIEW_OPENING_PROMPT, INTERVIEW_SESSION_ERROR_MESSAGES } from 'interview-dsh-shared';
 import { startExamRoom, type ExamRoomSessions, type ExamRoomHost } from './start-exam-room';
 
 const mysql = { topic: 'MySQL 索引与优化', difficulty: 'mid' as const };
+const workspace = { cwd: '/Users/jiang/workspace' };
+const withList = (sessions: Omit<ExamRoomSessions, 'list'>): ExamRoomSessions => ({
+  ...sessions,
+  list: {
+    getSnapshot: () => ({
+      current: 'current-chat',
+      byId: { 'current-chat': workspace },
+    }),
+  },
+});
 
 describe('startExamRoom', () => {
   it('creates a session, attaches persona, prompts, then opens — in that order', async () => {
@@ -10,9 +20,9 @@ describe('startExamRoom', () => {
       calls.push('prompt');
       return { ok: true as const, value: { accepted: true as const } };
     });
-    const sessions: ExamRoomSessions = {
-      async create() {
-        calls.push('create');
+    const sessions = withList({
+      async create(opts) {
+        calls.push(`create:${JSON.stringify(opts)}`);
         return 'session-new';
       },
       binding(id) {
@@ -22,7 +32,7 @@ describe('startExamRoom', () => {
       open(id) {
         calls.push(`open:${id}`);
       },
-    };
+    });
     const host: ExamRoomHost = {
       async attachInterviewer(request) {
         calls.push(`attach:${request.sessionId}`);
@@ -36,7 +46,7 @@ describe('startExamRoom', () => {
 
     expect(result).toEqual({ ok: true, sessionId: 'session-new' });
     expect(calls).toEqual([
-      'create',
+      'create:{"cwd":"/Users/jiang/workspace"}',
       'attach:session-new',
       'binding:session-new',
       'prompt',
@@ -48,10 +58,33 @@ describe('startExamRoom', () => {
     );
   });
 
+  it('does not call empty create when cwd is missing', async () => {
+    const create = jest.fn();
+    const sessions: ExamRoomSessions = {
+      create,
+      binding: jest.fn(),
+      open: jest.fn(),
+      list: {
+        getSnapshot: () => ({ current: 'current-chat', byId: {} }),
+      },
+    };
+    const host: ExamRoomHost = {
+      attachInterviewer: jest.fn(),
+    };
+    const result = await startExamRoom({ sessions, host }, mysql);
+    expect(result).toEqual({
+      ok: false,
+      code: 'persist_unavailable',
+      message: INTERVIEW_SESSION_ERROR_MESSAGES.persist_unavailable,
+    });
+    expect(create).not.toHaveBeenCalled();
+    expect(host.attachInterviewer).not.toHaveBeenCalled();
+  });
+
   it('does not prompt or open when persona attach fails', async () => {
     const prompt = jest.fn();
     const open = jest.fn();
-    const sessions: ExamRoomSessions = {
+    const sessions = withList({
       async create() {
         return 'session-new';
       },
@@ -59,7 +92,7 @@ describe('startExamRoom', () => {
         return { session: { prompt } };
       },
       open,
-    };
+    });
     const host: ExamRoomHost = {
       async attachInterviewer() {
         return {
@@ -98,13 +131,13 @@ describe('startExamRoom', () => {
     const host: ExamRoomHost = {
       attachInterviewer: jest.fn(),
     };
-    const sessions: ExamRoomSessions = {
+    const sessions = withList({
       async create() {
         throw new Error('SessionCreateError');
       },
       binding: jest.fn(),
       open: jest.fn(),
-    };
+    });
 
     const result = await startExamRoom({ sessions, host }, mysql);
 

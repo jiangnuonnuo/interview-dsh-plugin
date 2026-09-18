@@ -1,0 +1,105 @@
+{
+  "phase": "in_progress",
+  "sessionId": "session-eefe484c-9237-42b8-95da-25d9d8458fe4",
+  "topic": "MySQL 索引与优化",
+  "difficulty": "mid",
+  "archiveDir": "study/interview-dsh/20260918-1042-MySQL-索引与优化",
+  "cards": [
+    {
+      "id": "Q1",
+      "questionText": "什么是 MySQL 的覆盖索引（Covering Index）？它与普通索引回表查询相比，优势体现在哪里？**",
+      "questionBrief": "覆盖索引定义及与回表查询的性能对比",
+      "keyPoints": [
+        "定义：查询所需全部数据（SELECT、WHERE、ORDER BY等）均可从索引树直接获取，无需回表访问聚簇索引",
+        "判定方式：执行计划Extra字段显示'Using index'",
+        "核心优势-减少IO：避免回表产生的随机I/O，显著降低延迟并提升吞吐量",
+        "核心优势-缓存友好：索引体积通常小于数据行，提高Buffer Pool缓存命中率",
+        "额外收益：索引天然有序，若满足ORDER BY则可避免filesort排序开销",
+        "设计注意：索引宽度不宜过宽（防止索引膨胀），适合高并发低延迟场景，不适合宽表全列查询"
+      ],
+      "answer": "覆盖索引是查询要用的列都能从二级索引上拿到，不用回表去聚簇索引读整行。执行计划 Extra 里常见 Using index。好处是少一次随机 IO，索引更小也更吃缓存；如果排序字段也在索引里，还能避开 filesort。代价是索引不能太宽，否则膨胀，宽表全列查询覆盖不了。",
+      "comparison": {
+        "covered": [
+          "覆盖索引定义：查询所需全部数据可从索引树直接获取，无需回表访问聚簇索引",
+          "判定方式：执行计划Extra字段显示'Using index'",
+          "核心优势-减少IO：避免回表产生的随机I/O，显著降低延迟并提升吞吐量",
+          "核心优势-缓存友好：索引体积通常小于数据行，提高Buffer Pool缓存命中率",
+          "额外收益：索引天然有序，若满足ORDER BY则可避免filesort排序开销",
+          "设计注意：索引宽度不宜过宽（防止索引膨胀），不适合宽表全列查询"
+        ],
+        "missed": [
+          "设计注意中「适合高并发低延迟场景」的适用场景说明"
+        ],
+        "comment": "候选人作答准确覆盖覆盖索引的核心定义、判定依据、性能优势及设计边界，表述简洁清晰，仅遗漏了覆盖索引适合高并发低延迟场景的相关要点。"
+      },
+      "scores": [
+        {
+          "dimension": "基础扎实度",
+          "score": 4.5,
+          "reason": "对覆盖索引的定义、判定标识、核心优势、设计注意事项均有准确掌握，知识体系完整无明显错误"
+        },
+        {
+          "dimension": "原理理解",
+          "score": 4.5,
+          "reason": "清晰理解了覆盖索引避免回表减少随机IO的底层逻辑，也掌握了索引有序性带来排序优化的原理，对底层机制理解到位"
+        },
+        {
+          "dimension": "场景迁移",
+          "score": 3.5,
+          "reason": "提及了索引过宽、宽表全列查询的不适用场景，但遗漏了覆盖索引适合高并发低延迟场景的适用场景说明，场景覆盖不完整"
+        },
+        {
+          "dimension": "深度边界",
+          "score": 4,
+          "reason": "清楚指出了覆盖索引的设计边界（索引过宽会膨胀、无法覆盖宽表全列查询），对技术的适用限制有清晰认知"
+        },
+        {
+          "dimension": "表达清晰度",
+          "score": 5,
+          "reason": "表述简洁精准，逻辑通顺，核心要点完整传达，无冗余或歧义内容"
+        }
+      ],
+      "status": "scored",
+      "seedUserText": "<system-reminder>\nA skill is a reusable set of task-specific instructions. The following skills are available in this session:\n\n<available_skills>\n- `fireworks-tech-graph`: Create precise SVG technical diagrams, export PNG or offline HTML, and animate supported semantic SVGs to GIF. Use for architecture, UML, agent, cloud or workflow diagrams; not photos, raster art or statistical charts.\n- `pi-control-chrome`: Control the user's existing Chrome or Edge profile through pi-control-chrome browser tools and the local Bridge. Use for browser tabs, logged-in sessions, page inspection, interaction, screenshots, uploads, downloads, dialogs, clipboard, console/network/CDP, tab handoff or cleanup, and diagnosing Bridge, extension, browser-target, or stale-handle problems.\n</available_skills>\n\nIf the user names a skill, or the task clearly matches a skill's description, call the `skill` tool with the exact skill name before taking task actions. Load all applicable skills, then follow their full instructions. This catalog contains summaries only; do not infer or follow a skill's instructions until it has been loaded.\nA user may also invoke a skill directly; its <skill_content> block then appears in this conversation. Follow it, and do not call the `skill` tool again for that skill.\n</system-reminder>"
+    },
+    {
+      "id": "Q1.1",
+      "questionText": "针对联合索引 `idx_abc(a, b, c)`，请判断以下查询是否能利用该索引实现覆盖（Extra 中出现 `Using index`），并结合最左前缀匹配说明原因：**\n\n1. `SELECT a, b FROM t WHERE a = 1 AND b = 2`\n2. `SELECT a, c FROM t WHERE a = 1`\n3. `SELECT b, c FROM t WHERE b = 1 AND a = 2`",
+      "questionBrief": "针对联合索引idx_abc(a,b,c)，判断三个指定查询是否能利用其实现覆盖索引（Extra出现Using index），并结合最左前缀匹配说明原因",
+      "keyPoints": [
+        "覆盖索引核心判定标准：查询所需的所有字段（SELECT列表、WHERE条件查询字段）均包含在所用索引中，无需回表查询聚簇索引，此时Extra会显示Using index",
+        "联合索引idx_abc(a,b,c)的最左前缀匹配规则：WHERE条件查询列需从索引最左列a开始，按顺序连续匹配，禁止跳过中间列直接使用右侧列，未作为查询条件的中间列不影响覆盖索引判定",
+        "查询1（SELECT a,b FROM t WHERE a=1 AND b=2）：WHERE条件按序匹配最左前缀的a、b两列，满足最左前缀规则，查询所需的a、b字段均在索引中，可触发Using index",
+        "查询2（SELECT a,c FROM t WHERE a=1）：WHERE条件匹配最左前缀首列a，满足最左前缀规则，虽未使用中间列b，但查询所需的a、c字段均在索引中，可触发Using index",
+        "查询3（SELECT b,c FROM t WHERE b=1 AND a=2）：MySQL优化器会自动重排WHERE条件为a=2 AND b=1，匹配最左前缀的a、b两列，满足最左前缀规则，查询所需的b、c字段均在索引中，可触发Using index"
+      ],
+      "answer": null,
+      "comparison": null,
+      "scores": [
+        {
+          "dimension": "基础扎实度",
+          "score": null
+        },
+        {
+          "dimension": "原理理解",
+          "score": null
+        },
+        {
+          "dimension": "场景迁移",
+          "score": null
+        },
+        {
+          "dimension": "深度边界",
+          "score": null
+        },
+        {
+          "dimension": "表达清晰度",
+          "score": null
+        }
+      ],
+      "status": "pending",
+      "seedUserText": "<system-reminder>\nUpdated instructions from: AGENTS.md\n\nThis file changed after it was loaded. Use the following content instead of the previously loaded instructions from this file.\n\n# AGENTS.md\n\n## 架构实施\n\n- 代码设计与落地必须遵守 [架构文档](docs/architecture/ARCHITECTURE.md)。\n- 修改前先确认功能所属分层、模块职责和依赖方向。\n- 实现与架构文档冲突时，先改架构并说明原因，不得自行绕过。\n- 产品方向见 [产品文档](docs/product/REQUIREMENTS.md)；当前能力与验收以 OpenSpec change 为准。\n\n## OpenSpec 分工\n\n- change 制品（`proposal` / `specs` / `design` / `tasks`）写在 `openspec/changes/`，归档后进 `openspec/changes/archive/`。\n- 写 change 制品时的项目上下文、制品格式约束、apply 与 archive 阶段的行为约定，一律写进 [OpenSpec 配置](openspec/config.yaml) 的 `context` / `rules` / `operations.*.guidance`，不在本文件重复。\n- 本文件只放编码阶段长期生效的硬约束。与 `openspec/config.yaml` 同类的约束，此处只给指向，不复制条目，避免两份漂移。\n- 两边出现同一约束的不同表述时，按作用阶段判断归属：编码阶段归本文件，写 change 制品阶段归 `openspec/config.yaml`，只改归属那一处。\n- `openspec init` / `openspec update` 只生成技能与斜杠命令文件，不改写本文件；本文件中的 OpenSpec 片段保持原样，不手工编辑。\n\n## DSH 插件边界\n\n- 本仓库是 DSH 插件，不是独立应用。对话表面归宿主；`frontend/src/features/` 不得出现消息列表、输入框、气泡。\n- Host SDK 只出现在 `backend/src/infra/dsh/`；Web Client SDK 只出现在 `frontend/src/infra/dsh/`。跨端只通过 `shared/` 沟通，禁止 `fetch('/api/...')`。\n- 主入口挂在 `conversation.input.right`，不得挂 `conversation.session.header.utilities`。\n- Client 顶层 `inject` 仅为 `['slots', 'remote']`。`sidebarRight` / `sidebarRightTabs` 只用嵌套 inject 探测；额外服务只用 `ctx.get`，禁止直接读未声明的 `ctx.sidebarRight`。\n- `shell.overlay` 回退面板必须 `position: fixed` 且 z-index 足够，`absolute` 会被壁纸盖住。\n- 不得把 `dsh-better-sidebar` 当官方右栏；不得引入未随本机 Desktop 提供的包顶替官方符号。\n- 查不到官方 API 时标 `TODO` 并在面板给出可见失败，禁止猜测 API 或自建聊天绕过。\n- 禁止硬编码密钥；前端不做加密、解密、权限判断、评分判定。\n- 禁止修改 DSH 核心或运行时（官方 Hook 除外）；`@deepseek-ai/*` 只用桌面端已带的包。\n- 验收以本机 Desktop 实机为准；不得用升级 Desktop、新建 profile、Vite 预览或 `doc/entry-panel-mock.html` 充当验收。\n- `openspec/changes/2026-09-12-interview-dsh-bagua-mode/` 按自建聊天写，实现时不遵循。\n\n## 日志与注释\n\n- 注释说明意图、约束和复杂流程，不复述代码。\n- 注释位于对应代码之前，禁止尾注释。\n- 禁止在代码和文档注释中写「已修改」「新增」「已修复」等本次改动过程。\n- 日志不得输出密码、Token、API Key、Authorization 或其他敏感信息。\n- 打开面板、开始面试、落盘失败必须在面板可见，禁止空 catch。\n\n## 测试策略\n\n- 小型纠错可以直接做，不强制新增测试。\n- 新功能、行为边界不清或风险较高的改动必须 TDD：失败测试 → 最小实现 → 通过 → 整理。\n- 仓库测试不能代替 DSH 桌面端验收。\n\n## 增量开发\n\n- 功能必须拆成可独立验证的小步；先最小可演示，再补后续能力。\n- 当前功能完成并验证后，再推进下一项。\n- 不把后续能力回填进已归档 change，也不一次性实现尚未验证的步骤。\n\n## 子代理协作\n\n- 多模块或可并行的工作时可以开子代理；由复杂度、并行价值和冲突风险决定，不设文件数门槛。\n- 子代理要有明确范围，避免同时改同一文件。\n- 主代理负责合并结果并核对架构边界。\n\n## Git 提交与评审\n\n- 可以查看工作区状态、检查差异、运行验证并汇报待提交内容。\n- 未获明确要求时，不得执行 `git add`、`git commit`、`git push`、合并或发布。\n- 完成后保留工作区变更，说明验证结果和待评审范围。\n\n</system-reminder>"
+    }
+  ],
+  "currentCardId": "Q1.1"
+}
