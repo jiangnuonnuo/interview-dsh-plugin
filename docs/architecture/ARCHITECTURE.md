@@ -4,7 +4,7 @@
 
 - 产品定位与使用者见 `docs/product/REQUIREMENTS.md`，不要用本文改写成产品说明书。
 - 当前能力、交互和验收以 OpenSpec change 为准，不要用本文锁死产品主链路。
-- 易忘事实与过程准则见 `AGENTS.md`。
+- 插件形态边界与提交评审见 `AGENTS.md`；已否决的做法见 `docs/FORBIDDEN.md`。
 
 实现与本文冲突时，先改本文并说明原因，再改代码。
 
@@ -22,9 +22,8 @@ DSH Web
 ```
 
 - 对话 UI、输入框、模型配置由 DSH 提供。
-- 插件前端只做面板；`frontend/src/features/` 不得出现消息列表、输入框、气泡。
 - 插件后端通过官方生命周期接入。
-- DSH Host SDK 只出现在 `backend/src/infra/dsh/`；DSH Web Client SDK 只出现在 `frontend/src/infra/dsh/`。
+- 插件形态边界（面板只做教练、不自建聊天）见 `AGENTS.md`。
 
 ## 2. 目录与模块职责
 
@@ -38,12 +37,12 @@ docs/architecture/ARCHITECTURE.md   本文
 openspec/    实现 change
 ```
 
-| 模块 | 职责 | 禁止 |
-|---|---|---|
-| `backend/` | 会话、提示词组装、校验、落盘、Host 适配 | 引用 Web Client SDK；在 Host 注册 Slot / 输入栏按钮 |
-| `frontend/` | 入口与评估面板、Client 适配 | 自建聊天；`features/` 直接 import Client SDK |
-| `shared/` | 跨端类型、API 契约、稳定错误码 | 业务逻辑、DSH SDK、React |
-| 根清单 | 声明 Host/Client 组合包 | 另起顶层业务文件夹 |
+| 模块 | 职责 |
+|---|---|
+| `backend/` | 会话、提示词组装、校验、落盘、Host 适配 |
+| `frontend/` | 入口与评估面板、Client 适配 |
+| `shared/` | 跨端类型、API 契约、稳定错误码 |
+| 根清单 | 声明 Host/Client 组合包 |
 
 新文件必须落到对应目录。仓库根的 `package.json` / `cordis.patch.yml` 只作 DSH 组合包清单。
 
@@ -69,7 +68,6 @@ frontend/infra/dsh            backend/infra/dsh
 - `data/`：内存或工作区持久化。不引用 DSH。
 - `infra/dsh/`：唯一可调用 Host API 的地方（Agent 注入、轮次、Typert、工作区文件、插件生命周期）。
 - 根包 `main` 指向 `backend/dist/index.js`，该模块必须导出 `apply` 与 `name`。`backend/tsconfig.json` 的 `rootDir` 必须是 `./src`，否则 dist 布局对不上、插件树起不来。
-- 不要把本机 Desktop 安装目录写进仓库。
 
 ### 3.2 前端
 
@@ -77,7 +75,6 @@ frontend/infra/dsh            backend/infra/dsh
 - 只通过 `shared/` + 官方 `ctx.remote`（或等价桥接）调后端，禁止 `fetch('/api/...')`。
 - 功能放在 `frontend/src/features/`，通过 port 接口拿数据；DSH Web Client API 只出现在 `frontend/src/infra/dsh/`。
 - 样式：当前入口使用 CSS Modules。Client 构建必须把样式内联进 `frontend/dist/client.js`（DSH 只加载该文件，不加载旁路 `style.css`）。新增 UI 库或改用 Tailwind 须在对应 OpenSpec change 里说明。
-- 视觉参照：`doc/entry-panel.png` 管入口结构；`doc/entrance.png` / `doc/layout.png` 只说明宿主位置与后续评估布局，其中的时长、倒计时、非约定评分维度不要从设计图倒推进架构。
 
 ### 3.3 shared
 
@@ -86,91 +83,68 @@ frontend/infra/dsh            backend/infra/dsh
 
 ## 4. DSH 适配层
 
-选型结论（桌面端版本、better-sidebar、验收替身）见 `AGENTS.md`。下面是装配设计，改接法先改本节。
+下面是装配设计，改接法先改本节。已否决的接法见 `docs/FORBIDDEN.md`。
 
 ### 4.1 Host 适配层
 
 - 只出现在 `backend/src/infra/dsh/`。
-- Host `apply` 声明 `inject: ['agents', 'llm', 'agentDefaultModel']`，以便在新会话的 Agent 上挂 `systemPrompt.section`，并用当前默认模型做教练静默补全。
-- 当前 `apply` 的 `provide('interviewEntry')` 提供配置校验、`attachInterviewer`、`briefCoach` 与 `watchCoachTurn`。禁止在 Host 注册 Slot、右栏 tab 或输入栏按钮。
-- 开考时 Client 先 `sessions.create()`，再 remote `attachInterviewer`；适配层用 `ctx.agents.get(sessionId)` 拿到刚创建的 Agent，在 **agent.ctx**（不是插件根 ctx）上挂 `deployment:persona`。找不到 Agent 时返回 `inject_unavailable`，禁止用自建聊天绕过。
-- 第一问出现后 Host `briefCoach`：`agent.whenIdle()`，再从会话日志取 **最后一条人类用户之后** 的面试官可见文本（优先 `session.events`，含 `assistant/chunk` 的 `text-delta`；再鸭子类型认 `snapshotEvents()` / `deriveMessages()`。Desktop 0.2.17 bundled `dsh-session` 的人类对话在 events，模型面 `deriveMessages` 可能仍停在上一问），抽出 **当前待答问**（有 `【本题】` 则用标记之后；否则先跳过文末无问号议程，再取最后一段连续问句；无问句则整段），再 `llm.stream` 写进行中快照。教练文本不得 `append` 到对话。读日志抛错映射为 `first_question_failed`，禁止让 Typert 吞成 internal。
-- 后续轮次只看守：Client 循环 `watchCoachTurn`（不带 `force`），Host 轮询抽出后的待答问；相对上一问变化后先 `whenIdle()` 再 brief，避免 Think/半句。教练补全期间若日志已是更新的一问，改 brief 新题。`force: true` 时不比较指纹，按当前待答问立刻 brief。**不得**再 `session.prompt` 催下一问。查不到读日志符号时标 `TODO` 并返回 `follow_up_failed`。
+- Host 需要的服务在 `apply` 的 `inject` 里声明（当前：`agents`、`llm`、`agentDefaultModel`、`fs`）。查不到时用 `ctx.get('…')` 探测，仍没有就返回对应错误码。
+- 文件系统只走 Host `ctx.fs`：先 `ctx.fs.resolve(rel, { cwd })` 得到 FsTarget 再写，并带工作区写入策略。禁止 `node:fs`，不得把路径字符串直接传给 `writeText`。
+- 禁止在 Host 注册 Slot、右栏 tab 或输入栏按钮。
+- 端口清单、各端口的行为与错误码由对应 OpenSpec change 定义；本层只负责把能力交给正确的会话。
+- 教练输出不得进对话气泡；插件不得再向考场会话 `prompt` 催题。
+- 读会话日志的符号缺失时标 `TODO` 并返回对应错误码，禁止吞成 internal。
 
 ### 4.2 Client 适配层
 
-对照本机已装 **`dsh-ai-prompt-optimizer`**。入口只展开面板，不跳转、不新建聊天、不更换当前对话。
-
-**根包 `dsh.client.inject`（要加载的官方包）**必须与优化器对齐：
-
-- `@deepseek-ai/dsh-client-runtime`
-- `@deepseek-ai/dsh-api-remotes`
-- `@deepseek-ai/dsh-client-ui-layout`（`shell.overlay` 宿主）
-- `@deepseek-ai/dsh-client-ui-conversation`（输入栏按钮）
-
-**Client `apply` 的 `inject`（沙箱允许的 ctx 服务）**：`['slots', 'remote']`。不要把 `sidebarRight` / `sidebarRightTabs` 写进这一层——当前 harness 没有这些服务，顶层声明会导致 `apply` 失败。
-
-**沙箱**：只使用 `inject` 声明过的服务。探测额外服务只用 `ctx.get('…')`。禁止在 `get` 已返回 `undefined` 后再读 `ctx.sidebarRight`。
-
-**已注册 Slot：**
-
-| Slot | id / 其它 | 作用 |
-|---|---|---|
-| `conversation.input.right` | id `interview-dsh`，order `9`，文案「面试」 | 主触发。不得用 `conversation.session.header.utilities` |
-| `shell.overlay` | id `interview-dsh/entry-overlay`，order `40` | 回退面板 + 打开失败的可见错误层 |
-
-**打开分支（点击「面试」）：**
-
-只展开面板，不新建聊天。合法「开始」之后的开考链路在 Client 适配层：`acceptEntryConfig` → `sessions.create` → Host `attachInterviewer` → `session.prompt`（仅开口一次）→ `sessions.open` → Host `briefCoach`。进行中后 Client 循环 `watchCoachTurn`，不再 prompt。`sessions` 不得写进 Client 顶层 `inject`。探测顺序：先 `ctx.get('sessions')`，再嵌套 `ctx.inject(['sessions'])`；**点「开始」时再探一次**，不要只在 `apply` 时抓一次（那时这个 fiber 里可能还没有 sessions）。
-
-1. 用嵌套 `ctx.inject(['sidebarRightTabs'], …)` 尝试 `sidebarRightTabs.register({ id: 'interview-dsh/entry', kind: 'interview' })`，正文挂 `sidebar.right.pane.tab`。成功才把 `officialTabRegistered = true`。该路径缺失时不得让整个 Client `apply` 失败。
-2. 点击时：仅当上一步已成功，且 `ctx.get('sidebarRight')` 上确有 `openTab`，才调用 `openTab('interview')`。
-3. 否则 `shell.overlay` 右侧抽屉：内容 `position: fixed`、`z-index` ≥ 1000，宽度对齐官方 details 列（360px）。打开时探测 `layout`（先 `ctx.get('layout')`，再嵌套 `ctx.inject(['layout'])`）并 `openDetails()` 让对话列让出右栏；关闭时只 `closeDetails()`，**不得**再 `sessions.open` 把当前对话拽回考场。考场对话仍留在侧栏；用户可点那条会话继续作答。**禁止** `slots.inject('details')`（会盖掉宿主 DetailsPanel）。`layout` / `sessions` 不得写进 Client 顶层 inject。进行中快照存在模块状态里，overlay 卸载后重开「面试」仍是进行中；看守只在面板挂载时跑。「结束本场」清掉这份快照后才回到入口，才能再 `sessions.create` 开新一轮。
-4. 「关闭」在面板左上角（标题在其右侧）。再次点「面试」或点「关闭」收起。
-5. 打开失败：同一 overlay 展示可见错误，禁止空 catch、禁止点击无反应。
-
-禁止引入 `dsh-better-sidebar` 或其它未随桌面端提供的包。
+- 只出现在 `frontend/src/infra/dsh/`；功能在 `frontend/src/features/`，通过 port 接口拿数据。
+- 入口只展开面板：不跳转、不新建聊天、不更换当前对话。
+- 根包 `dsh.client.inject` 声明要加载的官方包，当前为 runtime、api-remotes、ui-layout（`shell.overlay` 宿主）、ui-conversation（输入栏按钮）；用到新的官方能力就补声明。
+- Client `apply` 的 `inject` 只声明沙箱确实提供的服务（当前 `['slots', 'remote']`）。额外服务只用 `ctx.get('…')` 探测，`get` 返回 `undefined` 后不得再直接读 `ctx.<service>`。
+- 具体 Slot、id、打开与回退分支、失败呈现由对应 OpenSpec change 定义。
+- 已否决的接法见 `docs/FORBIDDEN.md`：顶层声明本机没有的服务、`slots.inject('details')`、拿非官方 sidebar 顶替官方符号等。
 
 ## 5. 会话隔离
 
 开始面试后是两条会话。会话 A 是 **新开的 DSH 对话**（Client `sessions.create`），不是把面试官注入用户正在看的那条编码对话。配置仍来自当前工作区 / 默认模型，插件不得另配 Key。具体开口文案与面板字段由当前 OpenSpec change 定义。
 
-| 会话 | 职责 | 架构禁止 |
-|---|---|---|
-| A 对话 / 面试官 | 提问、追问、提示、换题、结束语 | 读场前历史；看见评分/标准答提示词；领域层直接调 Host SDK |
-| B 面板 / 教练 | 要点、标准答、评分、简报 | 任何输出进入气泡；读场前历史；前端做评分判定 |
+两条会话的产品角色见 `docs/product/REQUIREMENTS.md`。
+
+| 会话 | 架构禁止 |
+|---|---|
+| A 对话 / 面试官 | 读场前历史；看见评分/标准答提示词；领域层直接调 Host SDK |
+| B 面板 / 教练 | 任何输出进入气泡；读场前历史；前端做评分判定 |
 
 允许：A 的问答作为材料单向交给 B。禁止：B 回流到 A。第一问之后的追问由宿主对话继续；插件只看守抽出后的当前待答问并刷新面板，不得再向 A `prompt`。
 
-结束时必须能卸下面试官，当前对话恢复普通助手。面板「结束本场」只清掉进行中快照并回到入口，不切换宿主当前会话。适配层查不到注入/卸载 API 时标 `TODO`，禁止用自建聊天绕过。
+结束时必须能卸下面试官，当前对话恢复普通助手。面板「结束本场」只清掉进行中甲板并回到入口，不切换宿主当前会话。适配层查不到注入/卸载 API 时标 `TODO`，禁止用自建聊天绕过。
 
 提示词在 `backend/src/services/` 模板化；`infra/dsh/` 只负责交给哪条会话。面试官口径来自 `interviewer-role-prompt.md`，不在适配层手写一套角色。
 
-工作区写入走 `backend` 的 `data/` / `infra/`，失败必须映射到面板可见错误；前端不直接写文件，也不在浏览器里做加密。
+工作区写入走 `backend` 的 `data/` / `infra/`，失败必须映射到面板可见错误；前端不直接写文件。
 
 ## 6. 编码规范
 
-- TypeScript ESM（`type: module`）。后端 `lint` 以 `tsc --noEmit` 为准。
+- TypeScript ESM（`type: module`）。后端 `lint` 以 `tsc --noEmit` 为准。文件编码 UTF-8。
 - 注释只写意图、约束、复杂流程；位于对应代码之前；禁止尾注释；禁止「已修改 / 新增 / 已修复」之类过程句。
+- 日志与错误文案不得带密码、Token、API Key、Authorization 或其它敏感信息。
 - 新增或修改跨端字段时，先改 `shared/`，再改两端实现，避免一端内联一份结构。
 - 错误使用 `shared` 中的稳定错误码。禁止用空 catch、`null` 或静默成功表示失败。
-- 禁止在业务代码中硬编码 API Key / Token / 密码。日志与错误文案不得带密钥或完整授权头。
-- 提交信息使用 Conventional Commits。
-- 文件编码 UTF-8。
 
 ## 7. 安全边界
 
-- 敏感数据默认加密、脱敏、不暴露给前端。
+- 禁止在业务代码中硬编码 API Key / Token / 密码。敏感数据默认脱敏，不暴露给前端。
 - 前端不做加密、解密、权限判断、评分判定。
 - 面试活跃路径禁止不可取消的异步工作；评估请求必须可随会话结束取消。
-- 禁止修改 DSH 核心（官方 Hook 除外）。禁止引入未随桌面端提供、也未经当前 change 确认的依赖。
+- 禁止引入未随桌面端提供、也未经当前 change 确认的依赖。
 
 ## 8. 测试约定
 
 - 后端：会话编排、提示词组装、校验、落盘、错误映射要有单元测试。
 - 前端：测入口/评估面板和适配层边界，不要为不存在的聊天页写测试。
 - 适配层边界测试锁住「Host 不注册 Slot、Client 不把 Host SDK 引进 features」。
-- 桌面端实机验收是 OpenSpec change 的交付门闩；`npm test`、Vite、`doc/entry-panel-mock.html` 只是仓库内前置。
+- 新功能、行为边界不清或风险较高的改动：先写失败测试再最小实现（TDD）；小型纠错不强制。
+- 验收以本机 DSH Desktop 实机为准，是 OpenSpec change 的交付门闩；`npm test` 只是仓库内前置。被否决的验收替身见 `docs/FORBIDDEN.md`。
 
 ## 9. 变更规则
 
