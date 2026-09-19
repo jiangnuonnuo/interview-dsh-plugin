@@ -64,15 +64,18 @@
 - 面试官提出新题后，旧卡保持可见，面板显示「正在生成本题」；要点生成完成后追加新卡并自动定位到最新卡。
 - 已答卡片必须保留原题、作答、对照与五维评分，可通过滑动切回查看。
 
-最终视觉参考：
+最终视觉参考（主路径）：
 
 | 状态 | 说明 | 参考图 |
 |---|---|---|
+| 入口待开考 | 选题与难度；xerina 头像与署名 | [interview-panel-flat-entry.png](../product-design/interview-panel-flat-entry.png) |
 | 卡片流态 | 面试进行中，左右滑动快速切题 | [interview-panel-flat-card-flow.png](../product-design/interview-panel-flat-card-flow.png) |
 | 完整详情态 | 点击当前卡后查看完整题干与分区内容 | [interview-panel-flat-detail.png](../product-design/interview-panel-flat-detail.png) |
 | 实时更新态 | 新题出现后，旧卡保留并展示生成中状态 | [interview-panel-flat-live-update.png](../product-design/interview-panel-flat-live-update.png) |
 
-上述图片是产品视觉方向，不是新增功能清单。面板不得因此增加聊天输入框、提示/跳过、计时器、场级仪表盘或其它未定义能力。
+其它已有功能点的状态图（不是新能力，只补视觉）在 `docs/product-design/`：首题单卡、已评详情、自定义主题、缺主题错误、开始中、打开失败、进行中错误、结束回入口。头像真源 [xerina-avatar.png](../product-design/xerina-avatar.png)。产品图若有错字，功能文案以 OpenSpec 为准。
+
+上述图片是产品视觉方向，不是新增功能清单。入口功能仍是搜主题、选难度、开始；不得增加聊天输入框、提示/跳过、计时器、场级仪表盘或其它未定义能力。入口署名固定为 `xerina`（圆形头像必须裁剪 [xerina-avatar.png](../product-design/xerina-avatar.png)，入口图 [interview-panel-flat-entry.png](../product-design/interview-panel-flat-entry.png) 已贴该真源；副标题 `xerina · 八股专项陪练`，页脚 `coach by xerina`），作为个人品牌推广，不得改成其它人名、另绘脸或做成独立运营后台。头像与署名不可点击。
 
 仍不做（要调整就先改本节，再开或改 change）：时长与倒计时、目录选择、跑题处理、项目深挖、混合模式、预置死题库、音视频、云归档、面板上的提示/跳过、场级长简报。
 

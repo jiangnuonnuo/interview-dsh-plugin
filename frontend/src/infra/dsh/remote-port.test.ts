@@ -139,4 +139,40 @@ describe('createInterviewPort', () => {
     expect(started).toEqual({ ok: true, deck });
     expect(create).toHaveBeenCalledWith({ workspaceId: 'ws-atlas' });
   });
+
+  it('restores the in-progress deck from the current host session', async () => {
+    const remote = {
+      acceptEntryConfig: jest.fn(),
+      getEntryConfig: jest.fn(),
+      attachInterviewer: jest.fn(),
+      briefCoach: jest.fn(),
+      watchCoachTurn: jest.fn(),
+      loadDeck: jest.fn(async ({ sessionId }: { sessionId: string }) => {
+        expect(sessionId).toBe('session-exam');
+        return { ok: true as const, deck };
+      }),
+      endRound: jest.fn(),
+      armRoundClose: jest.fn(),
+      clearRoundClose: jest.fn(),
+      getExamRoundState: jest.fn(),
+    };
+    const sessions: ExamRoomSessions = {
+      async create() {
+        return 'unused';
+      },
+      binding() {
+        return undefined;
+      },
+      open: jest.fn(),
+      list: {
+        getSnapshot: () => ({
+          current: 'session-exam',
+          byId: { 'session-exam': { cwd: '/Users/jiang/xerina-atlas' } },
+        }),
+      },
+    };
+    const port = createInterviewPort(remote, () => sessions);
+    await expect(port.restoreDeck()).resolves.toEqual({ ok: true, deck });
+    expect(remote.loadDeck).toHaveBeenCalledWith({ sessionId: 'session-exam' });
+  });
 });

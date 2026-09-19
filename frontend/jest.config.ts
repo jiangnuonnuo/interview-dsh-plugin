@@ -13,6 +13,7 @@ const config: Config = {
     '^interview-dsh-shared$': '<rootDir>/../shared/src/index.ts',
     '^interview-dsh-shared/(.*)$': '<rootDir>/../shared/src/$1',
     '\\.module\\.css$': '<rootDir>/tests/css-modules-stub.cjs',
+    '\\.(png|jpe?g|webp)$': '<rootDir>/tests/file-stub.cjs',
   },
   testMatch: ['**/?(*.)+(spec|test).[tj]s?(x)'],
 };

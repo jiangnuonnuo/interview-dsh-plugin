@@ -16,6 +16,19 @@ describe('EntryPanel', () => {
     expect(screen.getByRole('radio', { name: '初级' }).getAttribute('aria-checked')).toBe('false');
   });
 
+  it('shows xerina brand, circular avatar, and coach footer on the entry shell', () => {
+    render(<EntryPanel port={createMemoryEntryPort()} />);
+    expect(screen.getByRole('heading', { name: '模拟面试' })).toBeDefined();
+    expect(screen.getByText('xerina · 八股专项陪练')).toBeDefined();
+    expect(screen.getByText('coach by xerina')).toBeDefined();
+    const avatar = screen.getByRole('img', { name: /xerina/i });
+    expect(avatar.getAttribute('src')).toMatch(/xerina-avatar/);
+    expect(avatar.closest('a')).toBeNull();
+    expect(screen.getByRole('button', { name: '开始模拟面试' })).toBeDefined();
+    expect(screen.queryByText(/30\s*分钟/)).toBeNull();
+    expect(screen.queryByLabelText(/文件夹/)).toBeNull();
+  });
+
   it('selects MySQL as the current topic', () => {
     render(<EntryPanel port={createMemoryEntryPort()} />);
     fireEvent.click(screen.getByRole('button', { name: /MySQL 索引与优化/ }));

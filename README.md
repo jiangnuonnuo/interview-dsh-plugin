@@ -166,4 +166,4 @@ npm run lint
 | `docs/product/REQUIREMENTS.md` | 产品定位与使用者 |
 | `openspec/changes/` | 当前能力的实现 change |
 | `interviewer-role-prompt.md` | 面试官内容口径 |
-| `doc/entrance.png` / `doc/layout.png` / `doc/entry-panel.png` | UI 参考 |
+| `doc/entrance.png` / `doc/layout.png` / `docs/product-design/` | UI 参考（入口与进行中产品图） |

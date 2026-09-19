@@ -29,8 +29,8 @@ describe('EntryPanel start', () => {
     await waitFor(() => {
       expect(screen.getByTestId('interview-in-progress')).toBeDefined();
     });
-    expect(screen.getByText('进行中')).toBeDefined();
-    expect(screen.getByText('主题：MySQL 索引与优化')).toBeDefined();
+    expect(screen.getByText('进行中 · 八股专项')).toBeDefined();
+    expect(screen.getByTestId('card-flow')).toBeDefined();
     expect(screen.getByTestId('card-id').textContent).toBe('Q1');
     expect(screen.queryByText('待开考')).toBeNull();
     expect(screen.queryByRole('log')).toBeNull();

@@ -11,6 +11,7 @@ import {
 import type { EntryPort } from './entry-port';
 import { examPanelState } from './exam-panel-state';
 import { InProgressPanel } from '../session/InProgressPanel';
+import xerinaAvatar from './xerina-avatar.png';
 import styles from './EntryPanel.module.css';
 
 const TOPIC_ICONS: Record<string, { background: string; svg: ReactElement }> = {
@@ -92,22 +93,26 @@ export interface EntryPanelProps {
 
 const PanelHead = ({ onClose }: { onClose?: () => void }) => (
   <header className={styles.head}>
-    {onClose !== undefined ? (
-      <button type="button" className={styles.close} onClick={onClose}>
-        关闭
-      </button>
-    ) : null}
+    <div className={styles.chrome}>
+      {onClose !== undefined ? (
+        <button type="button" className={styles.close} onClick={onClose}>
+          关闭
+        </button>
+      ) : (
+        <span />
+      )}
+      <h1 className={styles.title}>模拟面试</h1>
+      {onClose !== undefined ? (
+        <button type="button" className={styles.dismiss} onClick={onClose} aria-label="关闭面板">
+          ×
+        </button>
+      ) : (
+        <span />
+      )}
+    </div>
     <div className={styles.brand}>
-      <div className={styles.mark} aria-hidden="true">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M3 3.5h10v9H3z" stroke="#fff" strokeWidth="1.4" />
-          <path d="M5 6h6M5 8.5h4" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
-        </svg>
-      </div>
-      <div>
-        <h1 className={styles.title}>模拟面试</h1>
-        <p className={styles.sub}>八股专项陪练 · 新开对话当考场</p>
-      </div>
+      <img className={styles.avatar} src={xerinaAvatar} alt="xerina" width={40} height={40} />
+      <p className={styles.sub}>xerina · 八股专项陪练</p>
     </div>
   </header>
 );
@@ -165,20 +170,19 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
   }, [port]);
 
   useEffect(() => {
-    const cached = examPanelState.get();
-    if (cached === null) {
-      return;
-    }
+    const sessionId = examPanelState.peekSessionId();
     let cancelled = false;
-    void port
-      .loadDeck({ sessionId: cached.sessionId })
+    const restore = sessionId
+      ? port.loadDeck({ sessionId })
+      : port.restoreDeck();
+    void restore
       .then((result) => {
         if (cancelled || !aliveRef.current) {
           return;
         }
         if (result.ok) {
           examPanelState.set(result.deck);
-        } else if (result.code === 'follow_up_failed') {
+        } else if (result.code === 'follow_up_failed' && sessionId !== null) {
           examPanelState.set(null);
         }
       })
@@ -374,6 +378,7 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
           void endRound();
         }}
         refreshing={refreshing}
+        ending={ending}
       />
     );
   }
@@ -510,6 +515,7 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
             <br />
             本场不选时长、不选文件夹。
           </p>
+          <p className={styles.byline}>coach by xerina</p>
         </section>
       </div>
     </aside>

@@ -60,6 +60,13 @@ const createDeferredWatchPort = (loadDeck = async () => ({ ok: true as const, de
       });
     },
     loadDeck,
+    async restoreDeck() {
+      return {
+        ok: false as const,
+        code: 'follow_up_failed' as const,
+        message: INTERVIEW_SESSION_ERROR_MESSAGES.follow_up_failed,
+      };
+    },
     async endRound() {
       return {
         ok: true as const,
@@ -100,6 +107,14 @@ const startExam = async (port: EntryPort) => {
   });
 };
 
+const openDetail = () => {
+  fireEvent.click(screen.getByTestId('open-card-detail'));
+};
+
+const expand = (name: '作答' | '对照' | '评分') => {
+  fireEvent.click(screen.getByRole('button', { name }));
+};
+
 describe('EntryPanel watchCoachTurn', () => {
   afterEach(() => {
     act(() => {
@@ -109,7 +124,9 @@ describe('EntryPanel watchCoachTurn', () => {
   it('shows the new card and keeps Q1 reachable', async () => {
     const { port, resolve } = createDeferredWatchPort();
     await startExam(port);
+    expect(screen.getByTestId('card-flow')).toBeDefined();
     expect(screen.getByText('聚簇索引和二级索引的区别')).toBeDefined();
+    expect(screen.queryByText('聚簇索引叶子即行')).toBeNull();
 
     await act(async () => {
       resolve({ ok: true, status: 'updated', deck: nextDeck });
@@ -118,8 +135,10 @@ describe('EntryPanel watchCoachTurn', () => {
     await waitFor(() => {
       expect(screen.getByText('二级索引如何回表')).toBeDefined();
     });
-    expect(screen.getByText('先查二级再回聚簇')).toBeDefined();
     expect(screen.getByTestId('card-id').textContent).toBe('Q2');
+    openDetail();
+    expect(screen.getByText('先查二级再回聚簇')).toBeDefined();
+    fireEvent.click(screen.getByTestId('back-to-flow'));
     fireEvent.click(screen.getByTestId('prev-card'));
     expect(screen.getByText('聚簇索引和二级索引的区别')).toBeDefined();
     expect(screen.getByTestId('card-id').textContent).toBe('Q1');
@@ -147,6 +166,8 @@ describe('EntryPanel watchCoachTurn', () => {
       expect(screen.getByText('Redisson看门狗续期')).toBeDefined();
     });
     expect(screen.getByTestId('card-id').textContent).toBe('Q3');
+    openDetail();
+    expand('评分');
     const scores = screen.getByTestId('score-placeholders');
     expect(scores.textContent).toMatch(/—/);
     expect(scores.textContent).not.toMatch(/\d/);
@@ -168,6 +189,7 @@ describe('EntryPanel watchCoachTurn', () => {
       expect(screen.getByRole('alert').textContent).toMatch(/没有可用的同模型补全/);
     });
     expect(screen.getByText('聚簇索引和二级索引的区别')).toBeDefined();
+    openDetail();
     expect(screen.getByText('聚簇索引叶子即行')).toBeDefined();
   });
 
@@ -201,6 +223,23 @@ describe('EntryPanel watchCoachTurn', () => {
     expect(screen.getByText('聚簇索引和二级索引的区别')).toBeDefined();
   });
 
+  it('restores the in-progress deck from the current exam session after memory is empty', async () => {
+    examPanelState.set(null);
+    const { port } = createDeferredWatchPort();
+    const restoring: EntryPort = {
+      ...port,
+      async restoreDeck() {
+        return { ok: true as const, deck: nextDeck };
+      },
+    };
+    render(<EntryPanel port={restoring} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('interview-in-progress')).toBeDefined();
+    });
+    expect(screen.getByTestId('card-id').textContent).toBe('Q2');
+    expect(screen.getByText('二级索引如何回表')).toBeDefined();
+  });
+
   it('force-refreshes the current pending card when 刷新本题 is clicked', async () => {
     const { port, requests, resolveForce } = createDeferredWatchPort();
     await startExam(port);
@@ -232,6 +271,7 @@ describe('EntryPanel watchCoachTurn', () => {
       expect(screen.getByText('二级索引如何回表')).toBeDefined();
     });
     expect(screen.getByTestId('card-id').textContent).toBe('Q1');
+    openDetail();
     expect(screen.getByText('先查二级再回聚簇')).toBeDefined();
     expect(screen.getByTestId('refresh-coach').textContent).toBe('刷新本题');
     expect(screen.queryByRole('log')).toBeNull();
@@ -253,6 +293,7 @@ describe('EntryPanel watchCoachTurn', () => {
       expect(screen.getByRole('alert').textContent).toMatch(/没有可用的同模型补全/);
     });
     expect(screen.getByText('聚簇索引和二级索引的区别')).toBeDefined();
+    openDetail();
     expect(screen.getByText('聚簇索引叶子即行')).toBeDefined();
   });
 
@@ -283,6 +324,8 @@ describe('EntryPanel watchCoachTurn', () => {
     expect(screen.queryByText('聚簇索引和二级索引的区别')).toBeNull();
     expect(screen.getByTestId('qa-path').textContent).toMatch(/qa\.md/);
     expect(screen.getByTestId('summary-path').textContent).toMatch(/summary\.md/);
+    expect(screen.getByText('xerina · 八股专项陪练')).toBeDefined();
+    expect(screen.getByText('coach by xerina')).toBeDefined();
     expect(screen.queryByRole('log')).toBeNull();
     expect(document.querySelector('details')).toBeNull();
   });

@@ -129,6 +129,16 @@ export const createMemoryEntryPort = (): EntryPort => {
       }
       return { ok: true as const, deck };
     },
+    async restoreDeck() {
+      if (deck === null) {
+        return {
+          ok: false as const,
+          code: 'follow_up_failed' as const,
+          message: '本场记录不存在',
+        };
+      }
+      return { ok: true as const, deck };
+    },
     async endRound() {
       if (deck === null) {
         return {

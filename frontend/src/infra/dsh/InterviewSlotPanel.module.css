@@ -9,7 +9,7 @@
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  background: var(--dsw-alias-bg-base, #fff);
+  background: #f4f7fb;
   border-left: 1px solid var(--dsw-alias-border-l2, #e6ebf4);
   box-shadow: -8px 0 24px rgb(16 24 40 / 8%);
 }
@@ -17,6 +17,7 @@
 .body {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .backdrop {

@@ -101,6 +101,7 @@ export default defineConfig({
       },
     },
     cssCodeSplit: false,
+    assetsInlineLimit: 400000,
     target: 'es2022',
     sourcemap: true,
     outDir: 'dist',

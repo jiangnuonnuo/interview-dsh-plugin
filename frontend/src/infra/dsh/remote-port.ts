@@ -1,21 +1,22 @@
-import type {
-  AcceptEntryConfigRequest,
-  AcceptEntryConfigResponse,
-  AttachInterviewerRequest,
-  AttachInterviewerResponse,
-  BriefCoachRequest,
-  BriefCoachResponse,
-  ClearRoundCloseResponse,
-  EndRoundRequest,
-  EndRoundResponse,
-  ArmRoundCloseResponse,
-  GetEntryConfigResponse,
-  GetExamRoundStateRequest,
-  GetExamRoundStateResponse,
-  LoadDeckRequest,
-  LoadDeckResponse,
-  WatchCoachTurnRequest,
-  WatchCoachTurnResponse,
+import {
+  INTERVIEW_SESSION_ERROR_MESSAGES,
+  type AcceptEntryConfigRequest,
+  type AcceptEntryConfigResponse,
+  type AttachInterviewerRequest,
+  type AttachInterviewerResponse,
+  type BriefCoachRequest,
+  type BriefCoachResponse,
+  type ClearRoundCloseResponse,
+  type EndRoundRequest,
+  type EndRoundResponse,
+  type ArmRoundCloseResponse,
+  type GetEntryConfigResponse,
+  type GetExamRoundStateRequest,
+  type GetExamRoundStateResponse,
+  type LoadDeckRequest,
+  type LoadDeckResponse,
+  type WatchCoachTurnRequest,
+  type WatchCoachTurnResponse,
 } from 'interview-dsh-shared';
 import type { EntryPort } from '../../features/entry/entry-port';
 import { endExamRound } from './end-exam-round';
@@ -111,6 +112,17 @@ export const createInterviewPort = (
     loadDeck(request) {
       return unwrap(remote.loadDeck(request) as Promise<LoadDeckResponse>, 'loadDeck');
     },
+    restoreDeck() {
+      const current = resolveSessions(sessions)?.list?.getSnapshot?.()?.current;
+      if (typeof current !== 'string' || current.length === 0) {
+        return Promise.resolve({
+          ok: false as const,
+          code: 'follow_up_failed' as const,
+          message: INTERVIEW_SESSION_ERROR_MESSAGES.follow_up_failed,
+        });
+      }
+      return unwrap(remote.loadDeck({ sessionId: current }) as Promise<LoadDeckResponse>, 'loadDeck');
+    },
     endRound(request) {
       return endExamRound(
         {
@@ -142,6 +154,13 @@ export const createUnavailableEntryPort = (reason: string): EntryPort => ({
   },
   async loadDeck() {
     throw new Error(reason);
+  },
+  async restoreDeck() {
+    return {
+      ok: false as const,
+      code: 'follow_up_failed' as const,
+      message: reason,
+    };
   },
   async endRound() {
     throw new Error(reason);
