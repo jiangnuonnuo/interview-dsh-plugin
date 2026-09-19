@@ -8,6 +8,8 @@ import {
   archiveDirFor,
   loadDeckSession,
   renderCardMarkdown,
+  sessionArchiveRoot,
+  topicSlug,
   type WorkspaceArchive,
 } from '../src/data/workspace-archive.js';
 import { createFsWorkspaceArchive } from '../src/infra/dsh/workspace-fs.js';
@@ -101,10 +103,14 @@ const createHostLikeFs = () => {
 };
 
 describe('workspace archive', () => {
-  it('derives a hidden session directory from a legal session id', () => {
-    expect(archiveDirFor('session-exam')).toBe('.dsh-interview/session-exam');
-    expect(archiveDirFor('session-eefe484c-9237-42b8-95da-25d9d8458fe4')).toBe(
-      '.dsh-interview/session-eefe484c-9237-42b8-95da-25d9d8458fe4',
+  it('derives a hidden round directory from a legal session id', () => {
+    expect(sessionArchiveRoot('session-exam')).toBe('.dsh-interview/session-exam');
+    expect(archiveDirFor('session-exam', 1, 'MySQL 索引与优化')).toBe(
+      '.dsh-interview/session-exam/round-1-MySQL-索引与优化',
+    );
+    expect(topicSlug('MySQL 索引与优化')).toBe('MySQL-索引与优化');
+    expect(archiveDirFor('session-eefe484c-9237-42b8-95da-25d9d8458fe4', 2, 'Redis')).toBe(
+      '.dsh-interview/session-eefe484c-9237-42b8-95da-25d9d8458fe4/round-2-Redis',
     );
   });
 
@@ -116,7 +122,7 @@ describe('workspace archive', () => {
     expect(archiveDirFor('session..exam')).toBeUndefined();
   });
 
-  it('writes session.json and per-card markdown under .dsh-interview/<id>', async () => {
+  it('writes session.json and per-card markdown under round-1', async () => {
     const { files, fs } = createFakeFs();
     const archive = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' });
     const written = await archive.writeDeck({ ...twoCardDeck, archiveDir: '' });
@@ -124,11 +130,12 @@ describe('workspace archive', () => {
     if (!written.ok) {
       return;
     }
-    expect(written.archiveDir).toBe(archiveDirFor('session-exam'));
+    expect(written.archiveDir).toBe(archiveDirFor('session-exam', 1, twoCardDeck.topic));
     const jsonPath = `/workspace/${written.archiveDir}/session.json`;
     expect(files.get(jsonPath)).toContain('"currentCardId": "Q1.1"');
     expect(files.get(`/workspace/${written.archiveDir}/cards/Q1.md`)).toContain('# Q1');
     expect(files.get(`/workspace/${written.archiveDir}/cards/Q1.1.md`)).toContain('# Q1.1');
+    expect(files.get('/workspace/.dsh-interview/session-exam/index.json')).toContain('"status": "in_progress"');
     expect(files.has('/workspace/study/interview-dsh/20260917-1430-MySQL-索引与优化/session.json')).toBe(
       false,
     );
@@ -143,8 +150,10 @@ describe('workspace archive', () => {
     if (!written.ok) {
       return;
     }
-    expect(written.archiveDir).toBe('.dsh-interview/session-exam');
-    expect(files.has('/workspace/.dsh-interview/session-exam/session.json')).toBe(true);
+    expect(written.archiveDir).toBe('.dsh-interview/session-exam/round-1-MySQL-索引与优化');
+    expect(files.has('/workspace/.dsh-interview/session-exam/round-1-MySQL-索引与优化/session.json')).toBe(
+      true,
+    );
     expect(files.has('/workspace/study/interview-dsh/20260917-1430-MySQL-索引与优化/session.json')).toBe(
       false,
     );
@@ -233,5 +242,77 @@ describe('workspace archive', () => {
     if (loaded.ok) {
       expect(loaded.deck.cards).toHaveLength(2);
     }
+  });
+
+  it('writes a second round next to the first without overwriting session.json', async () => {
+    const { files, fs } = createFakeFs();
+    const archive = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' });
+    const first = await archive.writeDeck({ ...twoCardDeck, archiveDir: '' });
+    expect(first.ok).toBe(true);
+    if (!first.ok) {
+      return;
+    }
+    const firstJson = files.get(`/workspace/${first.archiveDir}/session.json`);
+    await archive.markEnded?.('session-exam', 'closing');
+    const secondDeck = createInterviewDeck({
+      sessionId: 'session-exam',
+      topic: 'Redis 并发与缓存',
+      difficulty: 'mid',
+      cards: [q1],
+      currentCardId: 'Q1',
+    });
+    const second = await archive.writeDeck(secondDeck);
+    expect(second.ok).toBe(true);
+    if (!second.ok) {
+      return;
+    }
+    expect(second.archiveDir).toBe('.dsh-interview/session-exam/round-2-Redis-并发与缓存');
+    expect(second.archiveDir).not.toBe(first.archiveDir);
+    expect(files.get(`/workspace/${first.archiveDir}/session.json`)).toBe(firstJson);
+    expect(files.get(`/workspace/${second.archiveDir}/session.json`)).toContain('Redis 并发与缓存');
+  });
+
+  it('does not restore an ended round through readDeck or loadDeckSession', async () => {
+    const { fs } = createFakeFs();
+    const archive = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' });
+    await archive.writeDeck({ ...twoCardDeck, archiveDir: '' });
+    await archive.markEnded?.('session-exam', 'closing');
+    expect(await archive.readDeck('session-exam')).toBeUndefined();
+    const examSessions = createExamSessionStore();
+    examSessions.save({
+      sessionId: 'session-exam',
+      topic: twoCardDeck.topic,
+      difficulty: twoCardDeck.difficulty,
+      lastQuestionText: '请说明聚簇索引。',
+      deck: twoCardDeck,
+      ended: true,
+    });
+    const loaded = await loadDeckSession(examSessions, { sessionId: 'session-exam' }, archive);
+    expect(loaded.ok).toBe(false);
+    if (!loaded.ok) {
+      expect(loaded.code).toBe('follow_up_failed');
+    }
+  });
+
+  it('reads a legacy in-progress root session.json and does not migrate study archives', async () => {
+    const { files, fs } = createFakeFs();
+    files.set('/workspace/.dsh-interview/session-exam/session.json', `${JSON.stringify(twoCardDeck)}\n`);
+    files.set(
+      '/workspace/study/interview-dsh/20260917-1430-MySQL-索引与优化/session.json',
+      '{"legacy":true}',
+    );
+    const archive = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' });
+    const loaded = await archive.readDeck('session-exam');
+    expect(loaded?.cards.map((card) => card.id)).toEqual(['Q1', 'Q1.1']);
+    const written = await archive.writeDeck({ ...twoCardDeck, archiveDir: '' });
+    expect(written.ok).toBe(true);
+    if (!written.ok) {
+      return;
+    }
+    expect(written.archiveDir).toMatch(/\/round-1-/);
+    expect(files.get('/workspace/study/interview-dsh/20260917-1430-MySQL-索引与优化/session.json')).toBe(
+      '{"legacy":true}',
+    );
+    expect(files.has('/workspace/.dsh-interview/session-exam/session.json')).toBe(true);
   });
 });

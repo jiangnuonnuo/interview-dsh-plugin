@@ -139,4 +139,70 @@ describe('briefCoachSession', () => {
       '开始本场八股专项模拟面试。',
     );
   });
+
+  it('writes a new Q1 into a new round directory after the previous round ended', async () => {
+    const { createExamSessionStore } = await import('../src/data/exam-session-store.js');
+    const { createFsWorkspaceArchive } = await import('../src/infra/dsh/workspace-fs.js');
+    const files = new Map<string, string>();
+    const fs = {
+      resolve(rel: string, opts?: { cwd?: string }) {
+        return `${opts?.cwd ?? ''}/${rel}`.replace(/\/+/g, '/');
+      },
+      async writeText(path: string, text: string) {
+        files.set(path, text);
+      },
+      async readText(path: string) {
+        const text = files.get(path);
+        if (text === undefined) {
+          throw new Error(`missing ${path}`);
+        }
+        return text;
+      },
+    };
+    const archive = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' });
+    const examSessions = createExamSessionStore();
+    const first = await briefCoachSession(
+      stubCoach({
+        readLatestQuestion: async () => ({ ok: true, text: questionText }),
+        complete: async () => '{"questionBrief":"聚簇 vs 二级索引","keyPoints":["回表"]}',
+      }),
+      { sessionId: 'session-exam', topic, difficulty },
+      examSessions,
+      archive,
+    );
+    expect(first.ok).toBe(true);
+    if (!first.ok) {
+      return;
+    }
+    const firstDir = first.deck.archiveDir;
+    await archive.markEnded?.('session-exam', 'closing');
+    examSessions.save({
+      sessionId: 'session-exam',
+      topic,
+      difficulty,
+      lastQuestionText: questionText,
+      deck: first.deck,
+      ended: true,
+    });
+    const second = await briefCoachSession(
+      stubCoach({
+        readLatestQuestion: async () => ({ ok: true, text: 'Redis 为什么单线程还快？' }),
+        complete: async () => '{"questionBrief":"单线程","keyPoints":["无锁"]}',
+      }),
+      { sessionId: 'session-exam', topic: 'Redis 并发与缓存', difficulty },
+      examSessions,
+      archive,
+    );
+    expect(second.ok).toBe(true);
+    if (!second.ok) {
+      return;
+    }
+    expect(second.deck.cards[0]?.id).toBe('Q1');
+    expect(second.deck.archiveDir).not.toBe(firstDir);
+    expect(second.deck.archiveDir).toBe('.dsh-interview/session-exam/round-2-Redis-并发与缓存');
+    expect(files.has(`/workspace/${firstDir}/cards/Q1.md`)).toBe(true);
+    expect(files.has(`/workspace/${second.deck.archiveDir}/cards/Q1.md`)).toBe(true);
+    expect(files.get(`/workspace/${firstDir}/cards/Q1.md`)).toContain('聚簇');
+    expect(files.get(`/workspace/${second.deck.archiveDir}/cards/Q1.md`)).toContain('单线程');
+  });
 });

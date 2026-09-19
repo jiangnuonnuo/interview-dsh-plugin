@@ -60,6 +60,15 @@ const createDeferredWatchPort = (loadDeck = async () => ({ ok: true as const, de
       });
     },
     loadDeck,
+    async endRound() {
+      return {
+        ok: true as const,
+        sessionId: firstDeck.sessionId,
+        qaPath: '.dsh-interview/session-exam/round-1-MySQL-索引与优化/qa.md',
+        summaryPath: '.dsh-interview/session-exam/round-1-MySQL-索引与优化/summary.md',
+        ended: true as const,
+      };
+    },
   };
   return {
     port,
@@ -267,9 +276,15 @@ describe('EntryPanel watchCoachTurn', () => {
     const { port } = createDeferredWatchPort();
     await startExam(port);
     fireEvent.click(screen.getByTestId('end-exam'));
-    expect(screen.getByRole('button', { name: '开始模拟面试' })).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '开始模拟面试' })).toBeDefined();
+    });
     expect(screen.queryByTestId('interview-in-progress')).toBeNull();
     expect(screen.queryByText('聚簇索引和二级索引的区别')).toBeNull();
+    expect(screen.getByTestId('qa-path').textContent).toMatch(/qa\.md/);
+    expect(screen.getByTestId('summary-path').textContent).toMatch(/summary\.md/);
+    expect(screen.queryByRole('log')).toBeNull();
+    expect(document.querySelector('details')).toBeNull();
   });
 });
 

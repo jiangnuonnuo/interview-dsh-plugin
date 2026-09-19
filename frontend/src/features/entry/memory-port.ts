@@ -129,5 +129,26 @@ export const createMemoryEntryPort = (): EntryPort => {
       }
       return { ok: true as const, deck };
     },
+    async endRound() {
+      if (deck === null) {
+        return {
+          ok: false as const,
+          code: 'follow_up_failed' as const,
+          message: '本场记录不存在',
+          ended: false,
+        };
+      }
+      const qaPath =
+        deck.archiveDir.length > 0
+          ? `${deck.archiveDir}/qa.md`
+          : '.dsh-interview/memory-session/round-1-round/qa.md';
+      const summaryPath =
+        deck.archiveDir.length > 0
+          ? `${deck.archiveDir}/summary.md`
+          : '.dsh-interview/memory-session/round-1-round/summary.md';
+      const sessionId = deck.sessionId;
+      deck = null;
+      return { ok: true as const, sessionId, qaPath, summaryPath, ended: true as const };
+    },
   };
 };

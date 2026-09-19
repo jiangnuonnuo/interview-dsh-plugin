@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 
-import { createInterviewDeck, createPendingCard } from 'interview-dsh-shared';
+import { createInterviewDeck, createPendingCard, INTERVIEW_ROUND_CLOSING_LINE, INTERVIEW_ROUND_END_TRIGGER } from 'interview-dsh-shared';
 import { createExamSessionStore } from '../src/data/exam-session-store.js';
 import { watchCoachTurnSession } from '../src/services/watch-coach-turn.js';
 import { stubCoach } from './coach-stub.js';
@@ -192,5 +192,54 @@ describe('watchCoachTurnSession', () => {
     }
     expect(complete).toHaveBeenCalledTimes(1);
     expect(examSessions.load('session-exam')?.lastQuestionText).toBe('请说明聚簇索引。');
+  });
+
+  it('does not card the closing line and stays unchanged after the round ended', async () => {
+    const complete = jest.fn(async () => '{"questionBrief":"不该调用","keyPoints":["x"]}');
+    const examSessions = seedStore();
+    const current = examSessions.load('session-exam');
+    if (current === undefined) {
+      throw new Error('missing exam record');
+    }
+    examSessions.save({
+      ...current,
+      ended: true,
+      closingSeed: INTERVIEW_ROUND_END_TRIGGER,
+    });
+    const ended = await watchCoachTurnSession(
+      stubCoach({
+        awaitNewQuestion: async () => ({
+          ok: true,
+          status: 'ready',
+          text: INTERVIEW_ROUND_CLOSING_LINE,
+        }),
+        complete,
+      }),
+      examSessions,
+      { sessionId: 'session-exam' },
+    );
+    expect(ended).toEqual({ ok: true, status: 'unchanged' });
+    expect(complete).not.toHaveBeenCalled();
+
+    const live = seedStore();
+    const closing = await watchCoachTurnSession(
+      stubCoach({
+        readLatestHuman: async () => ({
+          ok: true,
+          text: INTERVIEW_ROUND_END_TRIGGER,
+        }),
+        awaitNewQuestion: async () => ({
+          ok: true,
+          status: 'ready',
+          text: `好的，${INTERVIEW_ROUND_CLOSING_LINE}`,
+        }),
+        complete,
+      }),
+      live,
+      { sessionId: 'session-exam' },
+    );
+    expect(closing).toEqual({ ok: true, status: 'unchanged' });
+    expect(live.load('session-exam')?.deck.cards).toHaveLength(1);
+    expect(complete).not.toHaveBeenCalled();
   });
 });

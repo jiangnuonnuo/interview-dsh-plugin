@@ -1,4 +1,8 @@
-import { INTERVIEW_OPENING_PROMPT, INTERVIEW_SESSION_ERROR_MESSAGES } from 'interview-dsh-shared';
+import {
+  INTERVIEW_OPENING_PROMPT,
+  INTERVIEW_SESSION_ERROR_MESSAGES,
+  assembleNextRoundOpeningPrompt,
+} from 'interview-dsh-shared';
 import {
   startExamRoom,
   type ExamRoomSessions,
@@ -220,5 +224,77 @@ describe('startExamRoom', () => {
       expect(result.code).toBe('inject_unavailable');
     }
     expect(host.attachInterviewer).not.toHaveBeenCalled();
+  });
+
+  it('reuses the current ended exam session without create or re-attach', async () => {
+    const create = jest.fn();
+    const attachInterviewer = jest.fn();
+    const prompt = jest.fn(async () => ({ ok: true as const }));
+    const open = jest.fn();
+    const sessions: ExamRoomSessions = {
+      create,
+      binding: () => ({ session: { prompt } }),
+      open,
+      list: {
+        getSnapshot: () => ({
+          current: 'session-exam',
+          byId: { 'session-exam': { cwd: '/Users/jiang/workspace' } },
+        }),
+      },
+    };
+    const host: ExamRoomHost = {
+      attachInterviewer,
+      async getExamRoundState() {
+        return { ok: true, status: 'ended' };
+      },
+      clearRoundClose: jest.fn(async () => ({ ok: true as const })),
+    };
+
+    const result = await startExamRoom({ sessions, host }, mysql);
+
+    expect(result).toEqual({ ok: true, sessionId: 'session-exam' });
+    expect(create).not.toHaveBeenCalled();
+    expect(attachInterviewer).not.toHaveBeenCalled();
+    expect(host.clearRoundClose).toHaveBeenCalledWith({ sessionId: 'session-exam' });
+    expect(open).not.toHaveBeenCalled();
+    expect(prompt).toHaveBeenCalledWith(
+      [{ type: 'text', text: assembleNextRoundOpeningPrompt(mysql.topic, mysql.difficulty) }],
+      'queue',
+    );
+    const opening = assembleNextRoundOpeningPrompt(mysql.topic, mysql.difficulty);
+    expect(opening).toContain(mysql.topic);
+    expect(opening).toContain('上一轮');
+    expect(opening).toContain('已经结束');
+  });
+
+  it('still creates a new exam room when the current session is a coding chat', async () => {
+    const create = jest.fn(async () => 'session-exam');
+    const attachInterviewer = jest.fn(async () => ({ ok: true as const }));
+    const prompt = jest.fn(async () => ({ ok: true as const }));
+    const sessions = withList({
+      create,
+      binding: () => ({ session: { prompt } }),
+      open: jest.fn(),
+    });
+    const host: ExamRoomHost = {
+      attachInterviewer,
+      async getExamRoundState({ sessionId }) {
+        expect(sessionId).toBe('current-chat');
+        return { ok: true, status: 'none' };
+      },
+    };
+
+    const result = await startExamRoom({ sessions, host }, mysql);
+
+    expect(result).toEqual({ ok: true, sessionId: 'session-exam' });
+    expect(create).toHaveBeenCalled();
+    expect(attachInterviewer).toHaveBeenCalledWith({
+      sessionId: 'session-exam',
+      topic: mysql.topic,
+      difficulty: mysql.difficulty,
+    });
+    expect(attachInterviewer).not.toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'current-chat' }),
+    );
   });
 });

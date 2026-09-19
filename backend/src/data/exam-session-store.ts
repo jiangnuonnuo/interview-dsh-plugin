@@ -6,6 +6,8 @@ export interface ExamSessionRecord {
   readonly difficulty: Difficulty;
   readonly lastQuestionText: string;
   readonly deck: InterviewDeck;
+  readonly ended?: boolean;
+  readonly closingSeed?: string;
 }
 
 export interface ExamSessionStore {

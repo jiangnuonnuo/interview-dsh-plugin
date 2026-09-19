@@ -2,7 +2,7 @@
 
 ## Purpose
 
-在合法「开始模拟面试」之后，把当前 DSH 对话套成八股专项面试官，并行建立教练会话，使第一问出现在宿主对话、本题标准答要点出现在右侧面板；不自建聊天页，不把教练输出写入气泡。
+在合法「开始模拟面试」之后，在当前项目工作区下新开一场八股专项考场对话，并行建立教练会话，使第一问出现在该考场、本题标准答要点出现在右侧面板；不自建聊天页，不把教练输出写入气泡，也不把面试官注入用户正在写代码的那条对话。
 
 ## Requirements
 
@@ -11,7 +11,7 @@
 
 #### Scenario: Desktop start is the gate
 - **WHEN** 用 `dsh plugin add` 把本组合包装进 DSH 桌面端正在使用的 profile，打开当前对话，从输入栏打开「面试」，选好主题与难度并点「开始模拟面试」
-- **THEN** 当前对话中出现面试官的第一问（开场可含主题与难度），右侧面板进入进行中并展示本题标准答要点
+- **THEN** 当前对话中出现面试官的第一问（开场可含主题与难度），右侧面板进入进行中并展示编号为 `Q1` 的卡片及其标准答要点
 
 #### Scenario: Repository tests do not pass the change
 - **WHEN** 仅仓库内单测与构建通过，尚未在 DSH 桌面端完成上一场景
@@ -39,8 +39,34 @@
 - **WHEN** 当前对话在开始前已有用户或助手消息，用户随后合法开始模拟面试
 - **THEN** 第一问与本题要点不引用那些场前消息作为本场素材
 
+### Requirement: Start binds the exam room to the current workspace directory
+合法开始创建考场会话时，系统 SHALL 把当前工作区目录传给会话创建（`workspaceId` 或 `cwd` 恰好一个）。系统 MUST NOT 以空参数创建考场并指望 Desktop 进程目录就是工作区。无法解析当前工作区目录时，面板 MUST 展示可见错误，MUST NOT 注入面试官，MUST NOT 假装已开始。
+
+#### Scenario: Exam session receives workspace cwd
+- **WHEN** 用户在已打开某工作区的 DSH 对话中合法点「开始模拟面试」
+- **THEN** 新考场会话的工作目录等于该工作区路径，后续卡片落盘使用该目录
+
+#### Scenario: Missing workspace directory is visible
+- **WHEN** 用户合法点开始，但 Client 无法得到当前工作区的 `cwd` 或 `workspaceId`
+- **THEN** 面板展示可见失败，对话中不出现面试官，工作区不被错误写入 Desktop 进程目录
+
+### Requirement: Exam session joins the current workspace group
+合法开始创建考场会话时，系统 SHALL 把该会话挂到用户当前所在的 DSH 工作区分组（用户正在看的项目，而不是「未分组」）。当 Client 能解析到该工作区的稳定 id 时，创建参数 MUST 只带这个工作区 id，MUST NOT 只带目录路径——只带路径时会话会进入「未分组」。系统 MUST NOT 以空参数创建考场。无法解析当前工作区时，面板 MUST 展示可见错误，MUST NOT 注入面试官，MUST NOT 假装已开始。新考场仍是单独的面试官会话，MUST NOT 把面试官注入用户正在写代码的那条对话。
+
+#### Scenario: Start from a project page stays in that project
+- **WHEN** 用户在已打开某项目工作区的 DSH 页面合法点「开始模拟面试」，且 Client 能解析到该工作区 id
+- **THEN** 新考场会话出现在该项目的会话列表中，工作目录等于该工作区路径，系统 MUST NOT 把当前视图切到「未分组」里的其它会话
+
+#### Scenario: Ungrouped leftover chats are not the landing place
+- **WHEN** 侧栏「未分组」里已有标题为开始本场模拟面试的旧会话，用户从另一个已打开的项目页再次开始
+- **THEN** 本场新考场仍挂在该项目分组下，MUST NOT 把用户重定向进那些未分组旧会话
+
+#### Scenario: Missing workspace is visible
+- **WHEN** 用户合法点开始，但 Client 无法得到当前工作区的 id 或目录
+- **THEN** 面板展示可见失败，对话中不出现面试官，工作区不被错误写入 Desktop 进程目录
+
 ### Requirement: Interviewer asks the first question in the host conversation
-会话 A SHALL 使用 `interviewer-role-prompt.md` 的八股专项模板（填入本场主题与难度），开场说明本轮主题和难度后立刻问第一个问题，且每次只问一个问题。题目 MUST 由模型按主题与本场面试对话动态生成。系统 MUST NOT 用预写死题库驱动第一问。用户发言仍只通过 DSH 原对话输入框。本 change MUST NOT 处理用户作答后的追问、提示或跳过。
+会话 A SHALL 使用 `interviewer-role-prompt.md` 的八股专项模板（填入本场主题与难度），开场说明本轮主题和难度后立刻问第一个问题，且每次只问一个问题。题目 MUST 由模型按主题与本场面试对话动态生成。系统 MUST NOT 用预写死题库驱动第一问。用户发言仍只通过 DSH 原对话输入框。
 
 #### Scenario: First question appears in the current chat
 - **WHEN** 开始成功
@@ -55,11 +81,11 @@
 - **THEN** 问题来自模型对本场主题与难度的生成，而不是插件内置固定题面列表的按序取出
 
 ### Requirement: Coach panel shows the first question brief and standard-answer points
-面试进行中，右侧面板 SHALL 展示：本场进行中状态、当前主题、当前题干摘要、本题标准答要点。标准答要点 MUST 在题目一出现即可看见，MUST NOT 等到用户作答之后才出现。面板 MAY 展示八股五维评分区占位；本 change 中评分区 MUST NOT 由前端计算或判定分数。面板 MUST NOT 提供「提示一下」「跳过问题」的内容生成。
+面试进行中，右侧面板 SHALL 展示本场进行中状态、当前主题，以及第一张卡片 `Q1` 的题干摘要与本题标准答要点。标准答要点 MUST 在题目一出现即可看见，MUST NOT 等到用户作答之后才出现。`Q1` 在作答前 MUST 将对照与五维留空；面板 MUST NOT 由前端计算或判定分数。面板 MUST NOT 提供「提示一下」「跳过问题」的内容生成。
 
 #### Scenario: Points appear with the first question
 - **WHEN** 对话中已出现第一问
-- **THEN** 面板为进行中，可见当前主题、本题题干摘要与本题标准答要点
+- **THEN** 面板为进行中，可见当前主题、`Q1` 题干摘要与本题标准答要点，该卡状态为待答
 
 #### Scenario: Scoring is not decided on the frontend
 - **WHEN** 用户查看进行中面板

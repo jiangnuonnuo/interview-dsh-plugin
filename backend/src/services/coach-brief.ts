@@ -197,6 +197,33 @@ export const briefCoachSession = async (
     return coachUnavailable();
   }
 
+  const previous = examSessions?.load(request.sessionId);
+  let archiveDir = '';
+  if (archive?.beginRound !== undefined) {
+    const begun = await archive.beginRound(request.sessionId, request.topic, {
+      forceNext: previous?.ended === true,
+    });
+    if (!begun.ok) {
+      const failedCard = createPendingCard({
+        id: assignCardId([], { suggestedId: 'Q1' }),
+        questionText: question.text,
+        questionBrief: parsed.questionBrief,
+        keyPoints: parsed.keyPoints,
+        seedUserText: human.text,
+      });
+      const failedDeck = createInterviewDeck({
+        sessionId: request.sessionId,
+        topic: request.topic,
+        difficulty: request.difficulty,
+        cards: [failedCard],
+        currentCardId: failedCard.id,
+      });
+      examSessions && saveExamRecord(examSessions, failedDeck, question.text);
+      return { ...begun, deck: failedDeck };
+    }
+    archiveDir = begun.archiveDir;
+  }
+
   const card = createPendingCard({
     id: assignCardId([], { suggestedId: 'Q1' }),
     questionText: question.text,
@@ -210,6 +237,7 @@ export const briefCoachSession = async (
     difficulty: request.difficulty,
     cards: [card],
     currentCardId: card.id,
+    archiveDir,
   });
   examSessions && saveExamRecord(examSessions, deck, question.text);
 

@@ -1,5 +1,6 @@
 import {
   INTERVIEW_SESSION_ERROR_MESSAGES,
+  type ExamRoundIndex,
   type InterviewDeck,
   type LoadDeckRequest,
   type LoadDeckResponse,
@@ -16,9 +17,28 @@ export type WriteDeckResult =
   | { readonly ok: true; readonly archiveDir: string }
   | PersistFailure;
 
+export type BeginRoundResult =
+  | { readonly ok: true; readonly archiveDir: string; readonly round: number }
+  | PersistFailure;
+
+export type WriteRoundNotesResult =
+  | { readonly ok: true; readonly qaPath: string; readonly summaryPath: string }
+  | PersistFailure;
+
 export interface WorkspaceArchive {
   writeDeck(deck: InterviewDeck): Promise<WriteDeckResult>;
   readDeck(sessionId: string): Promise<InterviewDeck | undefined>;
+  beginRound?(
+    sessionId: string,
+    topic: string,
+    options?: { forceNext?: boolean },
+  ): Promise<BeginRoundResult>;
+  markEnded?(sessionId: string, closingSeed: string): Promise<{ ok: true } | PersistFailure>;
+  writeRoundNotes?(
+    sessionId: string,
+    notes: { readonly qa: string; readonly summary: string },
+  ): Promise<WriteRoundNotesResult>;
+  readRoundIndex?(sessionId: string): Promise<ExamRoundIndex | undefined>;
 }
 
 export const persistUnavailable = (): PersistFailure => ({
@@ -29,11 +49,40 @@ export const persistUnavailable = (): PersistFailure => ({
 
 const ARCHIVE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
-export const archiveDirFor = (sessionId: string): string | undefined => {
+export const sessionArchiveRoot = (sessionId: string): string | undefined => {
   if (!ARCHIVE_SESSION_ID.test(sessionId) || sessionId.includes('..')) {
     return undefined;
   }
   return `.dsh-interview/${sessionId}`;
+};
+
+export const topicSlug = (topic: string): string => {
+  const slug = topic
+    .trim()
+    .replace(/[/\\]+/g, '-')
+    .replace(/\.\./g, '')
+    .replace(/\s+/g, '-')
+    .replace(/[^\w\u4e00-\u9fff.-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40);
+  return slug.length > 0 ? slug : 'round';
+};
+
+export const archiveDirFor = (sessionId: string, round = 1, topic = 'round'): string | undefined => {
+  const root = sessionArchiveRoot(sessionId);
+  if (root === undefined || !Number.isInteger(round) || round < 1) {
+    return undefined;
+  }
+  return `${root}/round-${round}-${topicSlug(topic)}`;
+};
+
+export const isRoundArchiveDir = (sessionId: string, archiveDir: string): boolean => {
+  const root = sessionArchiveRoot(sessionId);
+  if (root === undefined || archiveDir.length === 0) {
+    return false;
+  }
+  return archiveDir.startsWith(`${root}/round-`) && /\/round-\d+-/.test(archiveDir);
 };
 
 export const joinWorkspacePath = (cwd: string, rel: string): string =>
@@ -77,6 +126,7 @@ export const saveExamRecord = (
   examSessions: ExamSessionStore,
   deck: InterviewDeck,
   lastQuestionText: string,
+  extras?: { ended?: boolean; closingSeed?: string },
 ): void => {
   examSessions.save({
     sessionId: deck.sessionId,
@@ -84,6 +134,8 @@ export const saveExamRecord = (
     difficulty: deck.difficulty,
     lastQuestionText,
     deck,
+    ended: extras?.ended === true,
+    ...(extras?.closingSeed !== undefined ? { closingSeed: extras.closingSeed } : {}),
   });
 };
 
@@ -93,7 +145,7 @@ export const loadDeckSession = async (
   archive?: WorkspaceArchive,
 ): Promise<LoadDeckResponse> => {
   const record = examSessions.load(request.sessionId);
-  if (record !== undefined) {
+  if (record !== undefined && record.ended !== true) {
     return { ok: true, deck: record.deck };
   }
   const disk = await archive?.readDeck(request.sessionId);

@@ -41,6 +41,10 @@ describe('createInterviewPort', () => {
       briefCoach: jest.fn(async () => ({ ok: true as const, deck })),
       watchCoachTurn: jest.fn(),
       loadDeck: jest.fn(),
+      endRound: jest.fn(),
+      armRoundClose: jest.fn(),
+      clearRoundClose: jest.fn(),
+      getExamRoundState: jest.fn(async () => ({ ok: true as const, status: 'none' as const })),
     };
     const port = createInterviewPort(remote, () => sessions);
 
@@ -94,6 +98,10 @@ describe('createInterviewPort', () => {
       briefCoach: jest.fn(async () => ({ ok: true as const, deck })),
       watchCoachTurn: jest.fn(),
       loadDeck: jest.fn(),
+      endRound: jest.fn(),
+      armRoundClose: jest.fn(),
+      clearRoundClose: jest.fn(),
+      getExamRoundState: jest.fn(async () => ({ ok: true as const, status: 'none' as const })),
     };
     const sessions: ExamRoomSessions = {
       create,

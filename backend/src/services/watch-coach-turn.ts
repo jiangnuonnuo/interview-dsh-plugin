@@ -1,6 +1,7 @@
 import {
   INTERVIEW_SESSION_ERROR_MESSAGES,
   createPendingCard,
+  isRoundClosingText,
   type InterviewDeck,
   type QuestionCard,
   type WatchCoachTurnRequest,
@@ -69,6 +70,9 @@ export const watchCoachTurnSession = async (
   if (record === undefined) {
     return followUpFailed();
   }
+  if (record.ended === true) {
+    return { ok: true, status: 'unchanged' };
+  }
 
   const pollMs = clock.pollMs ?? 300;
   let deck = record.deck;
@@ -99,6 +103,9 @@ export const watchCoachTurnSession = async (
     const human = await runtime.readLatestHuman(request.sessionId);
     if (!human.ok) {
       scoreError = human;
+      return;
+    }
+    if (isRoundClosingText(human.text) || human.text === record.closingSeed) {
       return;
     }
     const pending = pendingToScore(deck, human.text);
@@ -195,6 +202,9 @@ export const watchCoachTurnSession = async (
     if (!latest.ok) {
       return { ...latest, deck };
     }
+    if (isRoundClosingText(latest.text)) {
+      return { ok: true, status: 'unchanged' };
+    }
     const pending = lastPending(deck);
     if (pending !== undefined && latest.text === pending.questionText) {
       const parsed = await briefQuestion(latest.text);
@@ -223,6 +233,9 @@ export const watchCoachTurnSession = async (
       return { ...waited, deck };
     }
     if (waited.status === 'ready') {
+      if (isRoundClosingText(waited.text)) {
+        return { ok: true, status: 'unchanged' };
+      }
       await scorePendingIfAnswered();
       await appendNewCard(waited.text);
     }

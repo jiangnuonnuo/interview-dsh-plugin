@@ -1,6 +1,6 @@
 import { createExamSessionStore } from '../../data/exam-session-store.js';
 import { createInterviewEntryPort } from '../../entrypoints/interview-entry.js';
-import { attachInterviewerPersona, type PersonaHostContext } from './interviewer-persona.js';
+import { attachInterviewerPersona, clearRoundClosingSection, installRoundClosingSection, type PersonaHostContext } from './interviewer-persona.js';
 import { createHostCoachRuntime, type CoachHostContext } from './coach.js';
 import { createFsWorkspaceArchive, type WorkspaceTextFs } from './workspace-fs.js';
 
@@ -74,6 +74,12 @@ export function apply(ctx: HostContext): void {
         {
           install(sessionId, text) {
             return attachInterviewerPersona(ctx, { sessionId, text });
+          },
+          installRoundClose(sessionId, text) {
+            return installRoundClosingSection(ctx, { sessionId, text });
+          },
+          clearRoundClose(sessionId) {
+            clearRoundClosingSection(sessionId);
           },
         },
         createHostCoachRuntime(ctx),

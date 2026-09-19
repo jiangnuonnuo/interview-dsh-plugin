@@ -1,6 +1,8 @@
 import type {
   AcceptEntryConfigRequest,
   AcceptEntryConfigResponse,
+  EndRoundRequest,
+  EndRoundResponse,
   GetEntryConfigResponse,
   LoadDeckRequest,
   LoadDeckResponse,
@@ -15,4 +17,5 @@ export interface EntryPort {
   startInterview(request: AcceptEntryConfigRequest): Promise<StartInterviewResponse>;
   watchCoachTurn(request: WatchCoachTurnRequest): Promise<WatchCoachTurnResponse>;
   loadDeck(request: LoadDeckRequest): Promise<LoadDeckResponse>;
+  endRound(request: EndRoundRequest): Promise<EndRoundResponse>;
 }

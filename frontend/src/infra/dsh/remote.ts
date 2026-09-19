@@ -43,6 +43,7 @@ const sessionErrorSchema = z.enum([
   'first_question_failed',
   'follow_up_failed',
   'persist_unavailable',
+  'closing_failed',
 ]);
 
 const attachResultSchema = z.union([
@@ -149,6 +150,44 @@ const loadResultSchema = z.union([
   }),
 ]);
 
+const endRequestSchema = z.object({
+  sessionId: z.string(),
+});
+
+const endResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    sessionId: z.string(),
+    qaPath: z.string(),
+    summaryPath: z.string(),
+    ended: z.literal(true),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: sessionErrorSchema,
+    message: z.string(),
+    ended: z.boolean(),
+    qaPath: z.string().optional(),
+    summaryPath: z.string().optional(),
+  }),
+]);
+
+const roundStateRequestSchema = z.object({
+  sessionId: z.string(),
+});
+
+const roundStateResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    status: z.enum(['none', 'in_progress', 'ended']),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: sessionErrorSchema,
+    message: z.string(),
+  }),
+]);
+
 const strict = (typeSymbol: string, schema: z.ZodTypeAny) => ({
   mode: 'strict' as const,
   typeSymbol,
@@ -247,6 +286,70 @@ export const interviewEntryRemote = {
         },
       ],
       result: strict('interview-dsh#LoadDeckResponse', loadResultSchema),
+    },
+    {
+      id: 'interview-dsh#interviewEntry/endRound',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'endRound',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        {
+          name: 'request',
+          wire: 'request',
+          source: 'json' as const,
+          codec: strict('interview-dsh#EndRoundRequest', endRequestSchema),
+        },
+      ],
+      result: strict('interview-dsh#EndRoundResponse', endResultSchema),
+    },
+    {
+      id: 'interview-dsh#interviewEntry/armRoundClose',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'armRoundClose',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        {
+          name: 'request',
+          wire: 'request',
+          source: 'json' as const,
+          codec: strict('interview-dsh#EndRoundRequest', endRequestSchema),
+        },
+      ],
+      result: strict('interview-dsh#ArmRoundCloseResponse', attachResultSchema),
+    },
+    {
+      id: 'interview-dsh#interviewEntry/clearRoundClose',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'clearRoundClose',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        {
+          name: 'request',
+          wire: 'request',
+          source: 'json' as const,
+          codec: strict('interview-dsh#EndRoundRequest', endRequestSchema),
+        },
+      ],
+      result: strict('interview-dsh#ClearRoundCloseResponse', z.object({ ok: z.literal(true) })),
+    },
+    {
+      id: 'interview-dsh#interviewEntry/getExamRoundState',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'getExamRoundState',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        {
+          name: 'request',
+          wire: 'request',
+          source: 'json' as const,
+          codec: strict('interview-dsh#GetExamRoundStateRequest', roundStateRequestSchema),
+        },
+      ],
+      result: strict('interview-dsh#GetExamRoundStateResponse', roundStateResultSchema),
     },
   ],
 };

@@ -111,5 +111,7 @@ describe('InProgressPanel', () => {
     expect(screen.queryByRole('log')).toBeNull();
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(document.querySelector('.bubble')).toBeNull();
+    expect(document.querySelector('details')).toBeNull();
+    expect(screen.queryByText(/本轮手册/)).toBeNull();
   });
 });

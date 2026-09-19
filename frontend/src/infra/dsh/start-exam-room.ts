@@ -1,8 +1,13 @@
 import {
   INTERVIEW_OPENING_PROMPT,
   INTERVIEW_SESSION_ERROR_MESSAGES,
+  assembleNextRoundOpeningPrompt,
   type AttachInterviewerRequest,
   type AttachInterviewerResponse,
+  type ClearRoundCloseResponse,
+  type EndRoundRequest,
+  type GetExamRoundStateRequest,
+  type GetExamRoundStateResponse,
   type StartExamRoomInput,
   type StartExamRoomResponse,
 } from 'interview-dsh-shared';
@@ -47,6 +52,8 @@ export interface ExamWorkspaces {
 
 export interface ExamRoomHost {
   attachInterviewer(request: AttachInterviewerRequest): Promise<AttachInterviewerResponse>;
+  getExamRoundState?(request: GetExamRoundStateRequest): Promise<GetExamRoundStateResponse>;
+  clearRoundClose?(request: EndRoundRequest): Promise<ClearRoundCloseResponse>;
 }
 
 const asNonEmptyString = (value: unknown): string | undefined =>
@@ -124,6 +131,40 @@ export const resolveExamWorkspace = (
   return undefined;
 };
 
+const promptExamOpening = async (
+  sessions: ExamRoomSessions,
+  sessionId: string,
+  text: string,
+): Promise<StartExamRoomResponse> => {
+  const binding = sessions.binding(sessionId);
+  if (binding === undefined) {
+    return {
+      ok: false,
+      code: 'first_question_failed',
+      message: INTERVIEW_SESSION_ERROR_MESSAGES.first_question_failed,
+    };
+  }
+
+  let prompted: PromptRemoteResult;
+  try {
+    prompted = await binding.session.prompt([{ type: 'text', text }], 'queue');
+  } catch {
+    return {
+      ok: false,
+      code: 'first_question_failed',
+      message: INTERVIEW_SESSION_ERROR_MESSAGES.first_question_failed,
+    };
+  }
+  if (!prompted.ok) {
+    return {
+      ok: false,
+      code: 'first_question_failed',
+      message: INTERVIEW_SESSION_ERROR_MESSAGES.first_question_failed,
+    };
+  }
+  return { ok: true, sessionId };
+};
+
 export const startExamRoom = async (
   deps: {
     sessions: ExamRoomSessions | undefined;
@@ -139,6 +180,23 @@ export const startExamRoom = async (
       code: 'inject_unavailable',
       message: INTERVIEW_SESSION_ERROR_MESSAGES.inject_unavailable,
     };
+  }
+
+  const current = asNonEmptyString(sessions.list?.getSnapshot?.()?.current);
+  if (current !== undefined && deps.host.getExamRoundState !== undefined) {
+    const state = await deps.host.getExamRoundState({ sessionId: current });
+    if (state.ok && state.status === 'ended') {
+      await deps.host.clearRoundClose?.({ sessionId: current });
+      const prompted = await promptExamOpening(
+        sessions,
+        current,
+        assembleNextRoundOpeningPrompt(input.topic, input.difficulty),
+      );
+      if (!prompted.ok) {
+        return prompted;
+      }
+      return { ok: true, sessionId: current };
+    }
   }
 
   const workspace = resolveExamWorkspace(sessions, deps.workspaces);
@@ -177,34 +235,9 @@ export const startExamRoom = async (
     return attached;
   }
 
-  const binding = sessions.binding(sessionId);
-  if (binding === undefined) {
-    return {
-      ok: false,
-      code: 'first_question_failed',
-      message: INTERVIEW_SESSION_ERROR_MESSAGES.first_question_failed,
-    };
-  }
-
-  let prompted: PromptRemoteResult;
-  try {
-    prompted = await binding.session.prompt(
-      [{ type: 'text', text: INTERVIEW_OPENING_PROMPT }],
-      'queue',
-    );
-  } catch {
-    return {
-      ok: false,
-      code: 'first_question_failed',
-      message: INTERVIEW_SESSION_ERROR_MESSAGES.first_question_failed,
-    };
-  }
+  const prompted = await promptExamOpening(sessions, sessionId, INTERVIEW_OPENING_PROMPT);
   if (!prompted.ok) {
-    return {
-      ok: false,
-      code: 'first_question_failed',
-      message: INTERVIEW_SESSION_ERROR_MESSAGES.first_question_failed,
-    };
+    return prompted;
   }
 
   sessions.open(sessionId);

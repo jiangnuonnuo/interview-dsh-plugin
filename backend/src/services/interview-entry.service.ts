@@ -1,18 +1,25 @@
 import {
   CUSTOM_TOPIC_ID,
   ENTRY_ERROR_MESSAGES,
+  INTERVIEW_ROUND_CLOSING_PROMPT,
   INTERVIEW_SESSION_ERROR_MESSAGES,
   findPresetTopic,
   isDifficulty,
   type AcceptEntryConfigRequest,
   type AcceptEntryConfigResponse,
   type AttachInterviewerRequest,
+  type ArmRoundCloseResponse,
   type AttachInterviewerResponse,
   type BriefCoachRequest,
   type BriefCoachResponse,
+  type ClearRoundCloseResponse,
+  type EndRoundRequest,
+  type EndRoundResponse,
   type EntryConfig,
   type EntryErrorCode,
   type GetEntryConfigResponse,
+  type GetExamRoundStateRequest,
+  type GetExamRoundStateResponse,
   type LoadDeckRequest,
   type LoadDeckResponse,
   type WatchCoachTurnRequest,
@@ -22,11 +29,14 @@ import type { EntryConfigStore } from '../data/entry-config-store.js';
 import { createExamSessionStore, type ExamSessionStore } from '../data/exam-session-store.js';
 import { loadDeckSession, type WorkspaceArchive } from '../data/workspace-archive.js';
 import { briefCoachSession, type CoachRuntime } from './coach-brief.js';
+import { endRoundSession } from './end-round.js';
 import { assembleInterviewerPersona } from './interviewer-persona.js';
 import { watchCoachTurnSession } from './watch-coach-turn.js';
 
 export interface InterviewerPersonaInstaller {
   install(sessionId: string, text: string): AttachInterviewerResponse;
+  installRoundClose?(sessionId: string, text: string): ArmRoundCloseResponse;
+  clearRoundClose?(sessionId: string): void;
 }
 
 export interface InterviewEntryService {
@@ -36,6 +46,10 @@ export interface InterviewEntryService {
   briefCoach(request: BriefCoachRequest): Promise<BriefCoachResponse>;
   watchCoachTurn(request: WatchCoachTurnRequest): Promise<WatchCoachTurnResponse>;
   loadDeck(request: LoadDeckRequest): Promise<LoadDeckResponse>;
+  endRound(request: EndRoundRequest): Promise<EndRoundResponse>;
+  armRoundClose(request: EndRoundRequest): ArmRoundCloseResponse;
+  clearRoundClose(request: EndRoundRequest): ClearRoundCloseResponse;
+  getExamRoundState(request: GetExamRoundStateRequest): Promise<GetExamRoundStateResponse>;
 }
 
 const failure = (code: EntryErrorCode): AcceptEntryConfigResponse => ({
@@ -123,6 +137,7 @@ export const createInterviewEntryService = (
     return persona.install(request.sessionId, text);
   },
   briefCoach(request) {
+    persona.clearRoundClose?.(request.sessionId);
     return briefCoachSession(coach, request, examSessions, archive);
   },
   watchCoachTurn(request) {
@@ -130,5 +145,40 @@ export const createInterviewEntryService = (
   },
   loadDeck(request) {
     return loadDeckSession(examSessions, request, archive);
+  },
+  endRound(request) {
+    return endRoundSession(coach, examSessions, request, archive);
+  },
+  armRoundClose(request) {
+    if (persona.installRoundClose === undefined) {
+      return {
+        ok: false as const,
+        code: 'inject_unavailable' as const,
+        message: INTERVIEW_SESSION_ERROR_MESSAGES.inject_unavailable,
+      };
+    }
+    return persona.installRoundClose(request.sessionId, INTERVIEW_ROUND_CLOSING_PROMPT);
+  },
+  clearRoundClose(request) {
+    persona.clearRoundClose?.(request.sessionId);
+    return { ok: true as const };
+  },
+  async getExamRoundState(request) {
+    const record = examSessions.load(request.sessionId);
+    if (record?.ended === true) {
+      return { ok: true as const, status: 'ended' as const };
+    }
+    if (record !== undefined) {
+      return { ok: true as const, status: 'in_progress' as const };
+    }
+    const index = await archive?.readRoundIndex?.(request.sessionId);
+    if (index !== undefined) {
+      return { ok: true as const, status: index.status };
+    }
+    const disk = await archive?.readDeck(request.sessionId);
+    if (disk !== undefined) {
+      return { ok: true as const, status: 'in_progress' as const };
+    }
+    return { ok: true as const, status: 'none' as const };
   },
 });

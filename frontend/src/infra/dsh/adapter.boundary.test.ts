@@ -54,6 +54,10 @@ describe('frontend DSH adapter boundary', () => {
       .join('\n');
     expect(source).not.toMatch(/score:\s*[0-9]/);
     expect(source).not.toMatch(/status:\s*['"]scored['"]/);
+    expect(source).not.toMatch(/<details/);
+    expect(source).not.toMatch(/HandbookPreview/);
+    expect(source).not.toMatch(/markdown-editor/i);
+    expect(source).not.toMatch(/swiper/i);
   });
 
   it('registers the trigger on conversation.input.right, not the session header', () => {

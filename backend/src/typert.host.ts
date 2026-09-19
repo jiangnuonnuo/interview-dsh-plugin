@@ -43,6 +43,7 @@ const sessionErrorSchema = z.enum([
   'first_question_failed',
   'follow_up_failed',
   'persist_unavailable',
+  'closing_failed',
 ]);
 
 const attachResultSchema = z.union([
@@ -149,6 +150,44 @@ const loadResultSchema = z.union([
   }),
 ]);
 
+const endRequestSchema = z.object({
+  sessionId: z.string(),
+});
+
+const endResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    sessionId: z.string(),
+    qaPath: z.string(),
+    summaryPath: z.string(),
+    ended: z.literal(true),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: sessionErrorSchema,
+    message: z.string(),
+    ended: z.boolean(),
+    qaPath: z.string().optional(),
+    summaryPath: z.string().optional(),
+  }),
+]);
+
+const roundStateRequestSchema = z.object({
+  sessionId: z.string(),
+});
+
+const roundStateResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    status: z.enum(['none', 'in_progress', 'ended']),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: sessionErrorSchema,
+    message: z.string(),
+  }),
+]);
+
 const _request$codec = {
   mode: 'strict' as const,
   typeSymbol: 'interview-dsh#AcceptEntryConfigRequest',
@@ -203,6 +242,36 @@ const _loadResult$codec = {
   mode: 'strict' as const,
   typeSymbol: 'interview-dsh#LoadDeckResponse',
   schema: loadResultSchema,
+};
+const _endRequest$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#EndRoundRequest',
+  schema: endRequestSchema,
+};
+const _endResult$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#EndRoundResponse',
+  schema: endResultSchema,
+};
+const _armResult$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#ArmRoundCloseResponse',
+  schema: attachResultSchema,
+};
+const _clearResult$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#ClearRoundCloseResponse',
+  schema: z.object({ ok: z.literal(true) }),
+};
+const _roundStateRequest$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#GetExamRoundStateRequest',
+  schema: roundStateRequestSchema,
+};
+const _roundStateResult$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#GetExamRoundStateResponse',
+  schema: roundStateResultSchema,
 };
 
 export const TYPERT = {
@@ -274,6 +343,50 @@ export const TYPERT = {
       ],
       result: _loadResult$codec,
     },
+    {
+      id: 'interview-dsh#interviewEntry/endRound',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'endRound',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        { name: 'request', wire: 'request', source: 'json' as const, codec: _endRequest$codec },
+      ],
+      result: _endResult$codec,
+    },
+    {
+      id: 'interview-dsh#interviewEntry/armRoundClose',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'armRoundClose',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        { name: 'request', wire: 'request', source: 'json' as const, codec: _endRequest$codec },
+      ],
+      result: _armResult$codec,
+    },
+    {
+      id: 'interview-dsh#interviewEntry/clearRoundClose',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'clearRoundClose',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        { name: 'request', wire: 'request', source: 'json' as const, codec: _endRequest$codec },
+      ],
+      result: _clearResult$codec,
+    },
+    {
+      id: 'interview-dsh#interviewEntry/getExamRoundState',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'getExamRoundState',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        { name: 'request', wire: 'request', source: 'json' as const, codec: _roundStateRequest$codec },
+      ],
+      result: _roundStateResult$codec,
+    },
   ],
   model: {
     services: [
@@ -281,7 +394,7 @@ export const TYPERT = {
         description: 'interview-dsh 入口配置服务，校验并保存主题与难度。',
         summary: '八股专项入口配置服务。',
         tags: [],
-        jsDoc: '/** 入口配置：acceptEntryConfig / getEntryConfig / attachInterviewer / briefCoach / watchCoachTurn / loadDeck */',
+        jsDoc: '/** 入口配置：acceptEntryConfig / getEntryConfig / attachInterviewer / briefCoach / watchCoachTurn / loadDeck / endRound / armRoundClose / clearRoundClose / getExamRoundState */',
         key: 'interviewEntry',
         exportName: 'InterviewEntryService',
         members: [
@@ -326,6 +439,34 @@ export const TYPERT = {
             signature: 'loadDeck(request: LoadDeckRequest): Promise<LoadDeckResponse>',
             summary: '从内存或工作区档案恢复本场甲板。',
             jsDoc: '/** 重开面板时读回卡片；磁盘为真源。 */',
+          },
+          {
+            kind: 'method',
+            name: 'endRound',
+            signature: 'endRound(request: EndRoundRequest): Promise<EndRoundResponse>',
+            summary: '结束本轮：停看守并写 qa.md / summary.md，不卸人设。',
+            jsDoc: '/** 标记 ended、会话 B 写 summary.md、qa.md；收尾 prompt 由 Client 发出。 */',
+          },
+          {
+            kind: 'method',
+            name: 'armRoundClose',
+            signature: 'armRoundClose(request: EndRoundRequest): ArmRoundCloseResponse',
+            summary: '挂收尾导演词 section，不写气泡。',
+            jsDoc: '/** deployment:round-close；dispose 在下一轮 clearRoundClose。 */',
+          },
+          {
+            kind: 'method',
+            name: 'clearRoundClose',
+            signature: 'clearRoundClose(request: EndRoundRequest): ClearRoundCloseResponse',
+            summary: '摘掉收尾导演词 section。',
+            jsDoc: '/** 新一轮开口前调用。 */',
+          },
+          {
+            kind: 'method',
+            name: 'getExamRoundState',
+            signature: 'getExamRoundState(request: GetExamRoundStateRequest): Promise<GetExamRoundStateResponse>',
+            summary: '读取考场当前轮 in_progress / ended / none。',
+            jsDoc: '/** 当前会话是否可复用再开一轮。 */',
           },
         ],
         types: [],

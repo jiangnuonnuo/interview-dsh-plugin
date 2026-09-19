@@ -119,6 +119,8 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
   const [customTopic, setCustomTopic] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty>(DEFAULT_DIFFICULTY);
   const [error, setError] = useState<string | null>(null);
+  const [qaPath, setQaPath] = useState<string | null>(null);
+  const [summaryPath, setSummaryPath] = useState<string | null>(null);
   const deck = useSyncExternalStore(
     examPanelState.subscribe,
     examPanelState.get,
@@ -127,6 +129,8 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
   const [watchError, setWatchError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const endingRef = useRef(false);
   const aliveRef = useRef(true);
 
   useEffect(() => {
@@ -174,6 +178,8 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
         }
         if (result.ok) {
           examPanelState.set(result.deck);
+        } else if (result.code === 'follow_up_failed') {
+          examPanelState.set(null);
         }
       })
       .catch(() => undefined);
@@ -190,7 +196,7 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
   }, [onExamLive, deck?.sessionId]);
 
   useEffect(() => {
-    if (deck === null) {
+    if (deck === null || ending) {
       return;
     }
     const sessionId = deck.sessionId;
@@ -240,7 +246,7 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
     return () => {
       cancelled = true;
     };
-  }, [port, deck?.sessionId]);
+  }, [port, deck?.sessionId, ending]);
 
   const refreshCoach = async () => {
     if (deck === null || refreshing) {
@@ -287,6 +293,8 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
   const start = async () => {
     setSubmitting(true);
     setError(null);
+    setQaPath(null);
+    setSummaryPath(null);
     try {
       const result = await port.startInterview({
         topicId,
@@ -312,6 +320,47 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
     }
   };
 
+  const endRound = async () => {
+    if (deck === null || endingRef.current) {
+      return;
+    }
+    endingRef.current = true;
+    setEnding(true);
+    try {
+      const result = await port.endRound({ sessionId: deck.sessionId });
+      if (!aliveRef.current) {
+        return;
+      }
+      if (result.ended) {
+        examPanelState.set(null);
+        setWatchError(null);
+        setRefreshing(false);
+        setEnding(false);
+        endingRef.current = false;
+        setQaPath(result.ok || result.qaPath !== undefined ? (result.qaPath ?? null) : null);
+        setSummaryPath(
+          result.ok || result.summaryPath !== undefined ? (result.summaryPath ?? null) : null,
+        );
+        if (result.ok) {
+          setError(null);
+        } else {
+          setError(result.message);
+        }
+        return;
+      }
+      setWatchError(result.message);
+      setEnding(false);
+      endingRef.current = false;
+    } catch (cause: unknown) {
+      if (!aliveRef.current) {
+        return;
+      }
+      setWatchError(cause instanceof Error ? cause.message : String(cause));
+      setEnding(false);
+      endingRef.current = false;
+    }
+  };
+
   if (deck) {
     return (
       <InProgressPanel
@@ -322,9 +371,7 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
           void refreshCoach();
         }}
         onEnd={() => {
-          examPanelState.set(null);
-          setWatchError(null);
-          setRefreshing(false);
+          void endRound();
         }}
         refreshing={refreshing}
       />
@@ -440,6 +487,16 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
           {error ? (
             <p className={styles.error} role="alert">
               {error}
+            </p>
+          ) : null}
+          {qaPath ? (
+            <p className={styles.hint} data-testid="qa-path">
+              本轮问答：{qaPath}
+            </p>
+          ) : null}
+          {summaryPath ? (
+            <p className={styles.hint} data-testid="summary-path">
+              本轮总结：{summaryPath}
             </p>
           ) : null}
           <button className={styles.cta} type="button" onClick={() => void start()} disabled={submitting}>

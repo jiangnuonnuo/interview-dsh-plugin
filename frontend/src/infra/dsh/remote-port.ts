@@ -5,13 +5,20 @@ import type {
   AttachInterviewerResponse,
   BriefCoachRequest,
   BriefCoachResponse,
+  ClearRoundCloseResponse,
+  EndRoundRequest,
+  EndRoundResponse,
+  ArmRoundCloseResponse,
   GetEntryConfigResponse,
+  GetExamRoundStateRequest,
+  GetExamRoundStateResponse,
   LoadDeckRequest,
   LoadDeckResponse,
   WatchCoachTurnRequest,
   WatchCoachTurnResponse,
 } from 'interview-dsh-shared';
 import type { EntryPort } from '../../features/entry/entry-port';
+import { endExamRound } from './end-exam-round';
 import { startInterview, type StartInterviewHost } from './start-interview';
 import type { ExamRoomSessions, ExamWorkspaces } from './start-exam-room';
 
@@ -40,6 +47,10 @@ export interface InterviewRemote {
   briefCoach: (request: BriefCoachRequest) => Promise<unknown>;
   watchCoachTurn: (request: WatchCoachTurnRequest) => Promise<unknown>;
   loadDeck: (request: LoadDeckRequest) => Promise<unknown>;
+  endRound: (request: EndRoundRequest) => Promise<unknown>;
+  armRoundClose: (request: EndRoundRequest) => Promise<unknown>;
+  clearRoundClose: (request: EndRoundRequest) => Promise<unknown>;
+  getExamRoundState: (request: GetExamRoundStateRequest) => Promise<unknown>;
 }
 
 export type SessionsProbe = ExamRoomSessions | undefined | (() => ExamRoomSessions | undefined);
@@ -66,6 +77,15 @@ export const createInterviewPort = (
     briefCoach(request) {
       return unwrap(remote.briefCoach(request) as Promise<BriefCoachResponse>, 'briefCoach');
     },
+    getExamRoundState(request) {
+      return unwrap(
+        remote.getExamRoundState(request) as Promise<GetExamRoundStateResponse>,
+        'getExamRoundState',
+      );
+    },
+    clearRoundClose(request) {
+      return unwrap(remote.clearRoundClose(request) as Promise<ClearRoundCloseResponse>, 'clearRoundClose');
+    },
   };
 
   return {
@@ -91,6 +111,19 @@ export const createInterviewPort = (
     loadDeck(request) {
       return unwrap(remote.loadDeck(request) as Promise<LoadDeckResponse>, 'loadDeck');
     },
+    endRound(request) {
+      return endExamRound(
+        {
+          sessions: resolveSessions(sessions),
+          host: {
+            armRoundClose: (payload) =>
+              unwrap(remote.armRoundClose(payload) as Promise<ArmRoundCloseResponse>, 'armRoundClose'),
+            endRound: (payload) => unwrap(remote.endRound(payload) as Promise<EndRoundResponse>, 'endRound'),
+          },
+        },
+        request,
+      );
+    },
   };
 };
 
@@ -108,6 +141,9 @@ export const createUnavailableEntryPort = (reason: string): EntryPort => ({
     throw new Error(reason);
   },
   async loadDeck() {
+    throw new Error(reason);
+  },
+  async endRound() {
     throw new Error(reason);
   },
 });

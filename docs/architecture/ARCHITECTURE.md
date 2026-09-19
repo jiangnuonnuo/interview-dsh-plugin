@@ -89,10 +89,10 @@ frontend/infra/dsh            backend/infra/dsh
 
 - 只出现在 `backend/src/infra/dsh/`。
 - Host 需要的服务在 `apply` 的 `inject` 里声明（当前：`agents`、`llm`、`agentDefaultModel`、`fs`）。查不到时用 `ctx.get('…')` 探测，仍没有就返回对应错误码。
-- 文件系统只走 Host `ctx.fs`：先 `ctx.fs.resolve(rel, { cwd })` 得到 FsTarget 再写，并带工作区写入策略。禁止 `node:fs`，不得把路径字符串直接传给 `writeText`。工作区根是考场会话 `header.cwd`；相对路径为 `.dsh-interview/<考场 sessionId>/`（`session.json` 与 `cards/<id>.md`）。读盘用同一公式，不依赖进程内路径表。
+- 文件系统只走 Host `ctx.fs`：先 `ctx.fs.resolve(rel, { cwd })` 得到 FsTarget 再写，并带工作区写入策略。禁止 `node:fs`，不得把路径字符串直接传给 `writeText`。工作区根是考场会话 `header.cwd`；相对路径为 `.dsh-interview/<考场 sessionId>/round-<n>-<slug>/`（`session.json`、`cards/<id>.md`、结束时的 `qa.md` 与 `summary.md`），会话根另写 `index.json`（`in_progress` | `ended`）。读盘用同一公式，不依赖进程内路径表。旧的会话根 `session.json` 仍可按进行中恢复。
 - 禁止在 Host 注册 Slot、右栏 tab 或输入栏按钮。
 - 端口清单、各端口的行为与错误码由对应 OpenSpec change 定义；本层只负责把能力交给正确的会话。
-- 教练输出不得进对话气泡；插件不得再向考场会话 `prompt` 催题。
+- 教练输出不得进对话气泡；追问阶段插件不得再向考场会话 `prompt` 催题。结束本轮允许且仅允许 Client 对考场 `prompt` 一次短句「结束面试」；收尾导演词走 Host `systemPrompt.section`，不得进用户气泡。Host 适配层不得 `session.prompt`。
 - 读会话日志的符号缺失时标 `TODO` 并返回对应错误码，禁止吞成 internal。
 
 ### 4.2 Client 适配层
@@ -106,7 +106,7 @@ frontend/infra/dsh            backend/infra/dsh
 
 ## 5. 会话隔离
 
-开始面试后是两条会话。会话 A 是 **新开的 DSH 对话**（Client `sessions.create`），不是把面试官注入用户正在看的那条编码对话。创建时必须带当前工作区 `workspaceId`（Host 才会 `attachSession`，会话出现在该项目分组下）。仅传 `cwd` 只会写入目录、侧栏进「未分组」。`workspaceId` 从 `workspaces.list` 解析：当前会话已在某工作区账户里则用该 id；否则顶栏 `recentWorkspaceId`；否则 `cwd` 与 `items[].path` 对齐；都没有时才退回 `create({ cwd })`。配置仍来自当前工作区 / 默认模型，插件不得另配 Key。具体开口文案与面板字段由当前 OpenSpec change 定义。
+开始面试后是两条会话。会话 A 默认是 **新开的 DSH 对话**（Client `sessions.create`），不是把面试官注入用户正在写代码的那条对话。创建时必须带当前工作区 `workspaceId`（Host 才会 `attachSession`，会话出现在该项目分组下）。仅传 `cwd` 只会写入目录、侧栏进「未分组」。`workspaceId` 从 `workspaces.list` 解析：当前会话已在某工作区账户里则用该 id；否则顶栏 `recentWorkspaceId`；否则 `cwd` 与 `items[].path` 对齐；都没有时才退回 `create({ cwd })`。当宿主当前会话已是本插件考场且轮次索引为 `ended` 时，再开始必须复用该会话：不 `create`、不重挂人设、不 `open` 到别处，只发新一轮开口。配置仍来自当前工作区 / 默认模型，插件不得另配 Key。具体开口文案与面板字段由当前 OpenSpec change 定义。
 
 两条会话的产品角色见 `docs/product/REQUIREMENTS.md`。
 
@@ -115,13 +115,13 @@ frontend/infra/dsh            backend/infra/dsh
 | A 对话 / 面试官 | 读场前历史；看见评分/标准答提示词；领域层直接调 Host SDK |
 | B 面板 / 教练 | 任何输出进入气泡；读场前历史；前端做评分判定 |
 
-允许：A 的问答作为材料单向交给 B。禁止：B 回流到 A。第一问之后的追问由宿主对话继续；插件只看守抽出后的当前待答问并刷新面板，不得再向 A `prompt`。
+允许：A 的问答作为材料单向交给 B。禁止：B 回流到 A。第一问之后的追问由宿主对话继续；插件只看守抽出后的当前待答问并刷新面板，追问阶段不得再向 A `prompt`。结束本轮允许且仅允许那一次收尾 `prompt`，可见正文为「结束面试」。
 
-结束时必须能卸下面试官，当前对话恢复普通助手。面板「结束本场」只清掉进行中甲板并回到入口，不切换宿主当前会话。适配层查不到注入/卸载 API 时标 `TODO`，禁止用自建聊天绕过。
+结束时不得卸下面试官，考场会话保持。面板「结束本场」先停看守，Host 挂收尾导演词，再短句收尾并写本轮 `qa.md` 与 `summary.md`，然后回到入口，不切换宿主当前会话。新一轮开口前摘掉收尾段。适配层查不到注入 API 时标 `TODO`，禁止用自建聊天绕过。
 
 提示词在 `backend/src/services/` 模板化；`infra/dsh/` 只负责交给哪条会话。面试官口径来自 `interviewer-role-prompt.md`，不在适配层手写一套角色。
 
-工作区写入走 `backend` 的 `data/` / `infra/`，失败必须映射到面板可见错误；前端不直接写文件。新场只写 `.dsh-interview/<考场 sessionId>/`，不迁既有 `study/` 档案。
+工作区写入走 `backend` 的 `data/` / `infra/`，失败必须映射到面板可见错误；前端不直接写文件。新轮只写 `.dsh-interview/<考场 sessionId>/round-*/`，不迁既有 `study/` 档案。
 
 ## 6. 编码规范
 
