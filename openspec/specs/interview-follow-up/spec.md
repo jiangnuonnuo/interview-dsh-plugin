@@ -30,7 +30,7 @@
 - **THEN** 桌面验收任务保持未勾选，本 change MUST 保持未完成，MUST NOT 改写为视为通过
 
 ### Requirement: Follow-up turns stay on the host conversation
-第一问出现之后，候选人发言 SHALL 只通过 DSH 原对话输入框。面试官的追问 MUST 出现在同一条考场对话的宿主气泡中。插件 MUST NOT 为此新建聊天页，MUST NOT 在面板里画消息列表、输入框或气泡，MUST NOT 再向对话注入一条催促下一问的用户消息。面试官气泡 MUST NOT 被要求改成 JSON 或 `questionBrief` 才能驱动面板。
+第一问出现之后，候选人发言 SHALL 只通过 DSH 原对话输入框。面试官的追问 MUST 出现在同一条考场对话的宿主气泡中。插件 MUST NOT 为此新建聊天页，MUST NOT 在面板里画消息列表、输入框或气泡，MUST NOT 再向对话注入一条催促下一问的用户消息。面试官气泡 MUST NOT 被要求改成 JSON 或 `questionBrief` 才能驱动面板。结束本轮时允许且仅允许 `interview-round-close` 所定义的那一次收尾 `prompt`，该次可见正文 MUST 为「结束面试」，MUST NOT 被当作催促下一问。
 
 #### Scenario: Candidate answers in the host composer
 - **WHEN** 进行中面板已展示第一问要点，候选人在考场对话的宿主输入框提交回答
@@ -41,12 +41,31 @@
 - **THEN** 下一问出现在同一条考场对话里，插件面板内 MUST NOT 出现该追问气泡
 
 #### Scenario: Plugin does not inject a fake user turn
-- **WHEN** 系统检测到需要刷新教练材料
+- **WHEN** 系统检测到需要刷新教练材料（非结束本轮）
 - **THEN** 考场对话中 MUST NOT 因此多出一条由插件写入的、用于催促下一问的用户气泡
 
 #### Scenario: Exam chat is not a structured payload
 - **WHEN** 面试官在考场对话中产出下一轮文本
 - **THEN** 该文本 MUST 保持自然语言面试口气；系统 MUST NOT 把考场气泡改成 JSON、`questionBrief` 或其它面板专用载荷
+
+#### Scenario: End-round closing prompt is the only extra prompt
+- **WHEN** 用户点「结束本场」且收尾 `prompt` 被发送
+- **THEN** 考场中因此多出的插件用户种子只服务收尾且正文为「结束面试」，MUST NOT 再被用于催出下一问，MUST NOT 在追问阶段再次 `prompt`
+
+### Requirement: Watch stops when the round ends and MUST NOT card the closing line
+当用户点「结束本场」或本轮已进入结束流程时，系统 MUST 停止对该轮的看守。收尾气泡、短句「结束面试」种子、以及结束之后的闲聊 MUST NOT 被建成新卡，MUST NOT 覆盖已有卡。新一轮开始后，看守 MUST 只跟踪该新轮的待答问与作答。
+
+#### Scenario: Closing line is not a new card
+- **WHEN** 结束本轮已向考场 `prompt`「结束面试」，面试官产出含「此番 xerina 伴君至此，言尽于此，愿君面试顺遂，前程可期」的回复
+- **THEN** 甲板 MUST NOT 因此新增卡片，已有卡的对照与五维保持不变
+
+#### Scenario: End trigger is not scored as an answer
+- **WHEN** 本轮仍有待答卡，结束流程向考场发送「结束面试」
+- **THEN** 系统 MUST NOT 把该短句当作待答卡的作答来评分
+
+#### Scenario: Watch does not resume after end until a new round starts
+- **WHEN** 结束本轮成功，用户尚未再点开始
+- **THEN** 系统 MUST NOT 继续对本场调用看守刷新面板甲板
 
 ### Requirement: Coach panel refreshes on the pending interviewer question
 当考场对话中出现相对上一题发生变化的**当前待答问**，且该轮助手输出已经结束时，右侧面板 SHALL **追加一张新卡**并切到该卡，写入该待答问的题干摘要与标准答要点。标准答要点 MUST 在该待答问对用户可见后即可看见，MUST NOT 等到候选人再作答才刷新。在新卡开卷要点就绪之前，面板 MUST 继续展示上一张卡，MUST NOT 变成空白进行中，MUST NOT 删除或覆写已有卡片的对照与五维。面板 MAY 提示正在更新；MUST NOT 由前端计算或判定分数。
