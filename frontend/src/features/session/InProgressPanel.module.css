@@ -326,6 +326,26 @@
   gap: 12px;
 }
 
+.generatingPeek {
+  z-index: 2;
+  width: 52%;
+  min-height: 108px;
+  height: auto;
+  margin: 0;
+  padding: 16px 12px;
+  pointer-events: none;
+}
+
+.detailGenerating .detailTitle,
+.detailGenerating .detailBlock .brief {
+  color: #8b93a3;
+}
+
+.detail .generating {
+  margin: 4px 0 12px;
+  min-height: 108px;
+}
+
 .generatingText {
   font-size: 13px;
   font-weight: 500;

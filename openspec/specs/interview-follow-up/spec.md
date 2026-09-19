@@ -11,7 +11,7 @@
 
 #### Scenario: Desktop follow-up is the gate
 - **WHEN** 实现者启动本机已在使用的 DSH Desktop，用 `dsh plugin add` 把本包装进该 Desktop 正在使用的 profile，开始一场八股模拟面试并见到第一问与面板要点后，在宿主输入框提交对本题的回答
-- **THEN** 同一条考场对话中出现面试官的下一问（恰好一个待答问题），右侧面板追加新卡并展示该新题的题干摘要与标准答要点，且与第一问的要点不同；上一张卡仍在甲板中
+- **THEN** 同一条考场对话中出现面试官的下一问（恰好一个待答问题），右侧面板追加新卡并默认突出该新卡；进入详情可见该新题的题干摘要与标准答要点，且与第一问的要点不同；上一张卡仍在甲板中并可切回
 
 #### Scenario: Mixed lecture and pending question on Desktop
 - **WHEN** 宿主同一条面试官气泡先讲解或纠正上一问，再提出一个新的待答问（例如先讲页分裂与磁盘 I/O，再问联合索引最左匹配）
@@ -68,19 +68,34 @@
 - **THEN** 系统 MUST NOT 继续对本场调用看守刷新面板甲板
 
 ### Requirement: Coach panel refreshes on the pending interviewer question
-当考场对话中出现相对上一题发生变化的**当前待答问**，且该轮助手输出已经结束时，右侧面板 SHALL **追加一张新卡**并切到该卡，写入该待答问的题干摘要与标准答要点。标准答要点 MUST 在该待答问对用户可见后即可看见，MUST NOT 等到候选人再作答才刷新。在新卡开卷要点就绪之前，面板 MUST 继续展示上一张卡，MUST NOT 变成空白进行中，MUST NOT 删除或覆写已有卡片的对照与五维。面板 MAY 提示正在更新；MUST NOT 由前端计算或判定分数。
+当考场对话中出现相对上一题发生变化的**当前待答问**，且该轮助手输出已经结束时，右侧面板 SHALL **追加一张新卡**并切到该卡，写入该待答问的题干摘要与标准答要点。标准答要点 MUST 在该待答问对用户可见后即可看见，MUST NOT 等到候选人再作答才刷新。在新卡开卷要点就绪之前，面板 MUST 继续展示上一张卡，MUST 展示下一张卡形生成中槽，MUST NOT 变成空白进行中，MUST NOT 把当前卡整页冻死，MUST NOT 删除或覆写已有卡片的对照与五维。生成中视觉 MUST 对齐 `docs/product-design/interview-panel-flat-live-update.png` 的结构（旧卡仍在、下一张卡槽可见）。面板 MUST NOT 由前端计算或判定分数。
 
 #### Scenario: Points follow the new question
-- **WHEN** 宿主对话中已出现与上一题不同的下一问，且面试官该轮已说完
-- **THEN** 面板仍为进行中，可见同一主题与难度，当前卡的题干摘要与标准答要点对应该新题
+- **WHEN** 宿主对话中已出现与上一题不同的下一问，且面试官该轮已说完，且新卡开卷要点已生成
+- **THEN** 面板仍为进行中，可见同一主题与难度，当前突出卡为该新题；进入详情后题干摘要与标准答要点对应该新题
 
 #### Scenario: Previous snapshot remains until the new brief is ready
 - **WHEN** 候选人已作答，面试官下一问尚未说完或要点尚未生成
-- **THEN** 面板仍展示上一张卡的题干摘要与要点，MUST NOT 变成空白进行中
+- **THEN** 面板仍展示上一张卡的题干摘要入口，并可见下一张卡形生成中槽，MUST NOT 变成空白进行中，MUST NOT 只留下一张冻住的当前卡
 
 #### Scenario: Scoring stays a frontend placeholder
 - **WHEN** 面板因新题刷新
 - **THEN** 新卡的评分区没有任何由前端算出的分数或通过/不通过判定；已评卡上的后端分数 MUST 保持不变
+
+### Requirement: Watch publishes a scored deck before briefing the next card
+当最新待答卡因作答被评为已评，且甲板中不再有 pending 卡时，系统 SHALL 先把该已评甲板持久化，并作为一次 `watchCoachTurn` 成功更新返回给面板。该次返回 MUST NOT 同时追加下一张卡。下一张卡的开卷要点 SHALL 在随后的看守周期生成并追加。等待下一问期间若作答已可读取，系统 MUST 为本题打分并按上款返回，MUST NOT 把打分阻塞到下一问 brief 完成。请求与响应形状 MUST NOT 增加 `briefing` 字段，MUST NOT 增加第三种卡片状态。
+
+#### Scenario: First update after an answer is scored-only
+- **WHEN** 候选人已作答且本题打分完成，下一张卡的开卷要点尚未生成
+- **THEN** 面板收到的甲板最新卡为已评，卡片列表不含下一张 pending 卡
+
+#### Scenario: Next card arrives on a later update
+- **WHEN** 已评甲板已返回，随后面试官下一问说完且开卷要点生成成功
+- **THEN** 另一次成功更新追加新的 pending 卡，面板默认突出该新卡
+
+#### Scenario: Answer during wait is scored without waiting for the next brief
+- **WHEN** 看守正在等待下一问，且候选人作答已经可读取
+- **THEN** 系统为本题打分并返回已评甲板，MUST NOT 等到下一问 brief 完成后才返回分数
 
 ### Requirement: Mixed interviewer turns brief the pending question only
 当最新面试官回合同时包含对上一问的点评、揭晓或讲解，以及一个新的待答问时，系统 SHALL 只把该待答问交给教练补全和面板快照。题干指纹 MUST 是抽出的待答问，MUST NOT 是整段助手气泡。若回合中带有 `【本题】` 标记，系统 SHALL 使用标记之后的文本作为待答问。
@@ -102,10 +117,10 @@
 - **THEN** 系统将该整段文本作为待答问 brief
 
 ### Requirement: Candidate can force-refresh the coach snapshot
-进行中面板 SHALL 提供「刷新本题」控件。候选人触发后，系统 MUST 按当前待答问重新生成**当前待答卡**的题干摘要与标准答要点，即使该待答问与内存中的上一题指纹相同。该控件 MUST NOT 向考场对话注入用户气泡，MUST NOT 成为聊天输入框，MUST NOT 清掉已评卡的对照与五维。刷新失败时面板 MUST 展示可见错误并保留当前甲板。
+进行中面板 SHALL 在卡片流态与详情态都提供「刷新本题」控件。候选人触发后，系统 MUST 按当前待答问重新生成**当前待答卡**的题干摘要与标准答要点，即使该待答问与内存中的上一题指纹相同。该控件 MUST NOT 向考场对话注入用户气泡，MUST NOT 成为聊天输入框，MUST NOT 清掉已评卡的对照与五维。刷新进行中 MUST 可见进行中状态（按钮禁用或「刷新中」）。刷新失败时面板 MUST 展示可见错误并保留当前甲板。
 
 #### Scenario: Manual refresh rebriefs the current pending question
-- **WHEN** 进行中面板已展示快照，候选人点击「刷新本题」
+- **WHEN** 进行中面板已展示快照，候选人在流态或详情态点击「刷新本题」
 - **THEN** 系统读取当前待答问并重新 brief；成功后当前待答卡展示新的题干摘要与要点，考场对话不因此多出用户气泡，其它卡不变
 
 #### Scenario: Manual refresh failure keeps the last snapshot

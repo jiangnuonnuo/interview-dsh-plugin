@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import {
+  BAGUA_SCORE_DIMENSIONS,
   INTERVIEW_SESSION_ERROR_MESSAGES,
   createInterviewDeck,
   createPendingCard,
@@ -171,6 +172,36 @@ describe('EntryPanel watchCoachTurn', () => {
     const scores = screen.getByTestId('score-placeholders');
     expect(scores.textContent).toMatch(/—/);
     expect(scores.textContent).not.toMatch(/\d/);
+  });
+
+  it('shows generating-next when watch returns a scored deck without a new card', async () => {
+    const { port, resolve } = createDeferredWatchPort();
+    await startExam(port);
+    openDetail();
+    const scoredDeck = createInterviewDeck({
+      sessionId: 'session-exam',
+      topic: 'MySQL 索引与优化',
+      difficulty: 'mid',
+      cards: [
+        {
+          ...firstCard,
+          status: 'scored' as const,
+          answer: '叶子即行',
+          comparison: { covered: ['聚簇索引叶子即行'], missed: [], comment: '可以' },
+          scores: BAGUA_SCORE_DIMENSIONS.map((dimension) => ({ dimension, score: 3.5 })),
+        },
+      ],
+      currentCardId: 'Q1',
+    });
+    await act(async () => {
+      resolve({ ok: true, status: 'updated', deck: scoredDeck });
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('generating-next').textContent).toMatch(/正在准备下一题/);
+    });
+    expect(screen.getByTestId('card-detail')).toBeDefined();
+    expect(screen.getByText('请说明聚簇索引。')).toBeDefined();
+    expect(screen.getByTestId('card-id').textContent).toBe('Q1');
   });
 
   it('keeps the previous deck when refresh fails', async () => {

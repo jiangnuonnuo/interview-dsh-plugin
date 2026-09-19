@@ -30,10 +30,11 @@
 
 **Goals:**
 
-- 把进行中表面改成流态 / 详情态 / 生成中占位，结构对齐三张进行中产品图。
+- 把进行中表面改成流态 / 详情态 / **下一张卡形**生成中槽，结构对齐三张进行中产品图。
 - 把入口壳改到与上述图同一套 DSH 右侧面板语言，并露出 **xerina** 署名。
 - 用一份 UI 状态图覆盖**已有功能点**，前端按图实现，不靠猜。
-- 切卡、进详情、生成中占位、入口换肤只改前端呈现；甲板契约、看守、落盘、结束本轮、主题清单保持现有端口。
+- 看守响应形状不变；已评且无 pending 时先返回已评甲板，再 brief 下一张。生成中槽靠这次中间态出现，不得把当前卡冻死。
+- 甲板字段、落盘路径、结束本轮、主题清单保持现有端口。
 
 **Non-Goals:**
 
@@ -62,8 +63,8 @@ stateDiagram-v2
   InProgressDetail --> InProgressFlow: 返回卡片流
   InProgressFlow --> InProgressFlow: 滑动或上一题下一题
   InProgressDetail --> InProgressDetail: 滑动或上一题下一题
-  InProgressFlow --> Generating: 待新卡要点
-  InProgressDetail --> Generating: 待新卡要点
+  InProgressFlow --> Generating: 最新卡已评或刷新本题，下一张未就绪
+  InProgressDetail --> Generating: 最新卡已评或刷新本题，下一张未就绪
   Generating --> InProgressFlow: 新卡就绪且当时为流态
   Generating --> InProgressDetail: 新卡就绪且当时为详情态
   InProgressFlow --> Entry: 结束本场成功
@@ -72,6 +73,8 @@ stateDiagram-v2
   InProgressDetail --> Closed: 关闭
   Entry --> Closed: 关闭
 ```
+
+生成中叠在当前流态/详情上，是下一张卡槽，不是把当前卡替换成转圈页。
 
 ### 功能点 × 表面
 
@@ -82,7 +85,7 @@ stateDiagram-v2
 | P2 | 入口：搜主题、分类、预设、自定义、难度、开始 | 入口面板 | **换壳 + xerina 头像署名** | `interview-panel-flat-entry.png`；自定义 `…-entry-custom.png` |
 | P3 | 进行中卡片流 | 进行中 / 流态 | **重做** | `interview-panel-flat-card-flow.png`；首题 `…-card-flow-q1.png` |
 | P4 | 完整详情 | 进行中 / 详情态 | **重做** | `interview-panel-flat-detail.png` |
-| P5 | 新题生成中 | 流态或详情上的占位 | **新增可见占位** | `interview-panel-flat-live-update.png` |
+| P5 | 新题生成中 | 叠在流态/详情上的下一张卡槽 | **卡形槽 + 看守两次返回** | `interview-panel-flat-live-update.png` |
 | P6 | 刷新本题 | 流态舞台右上 + 详情卡内 | 换位置，行为不变 | 流态图 / 生成中图 |
 | P7 | 结束本场 | 进行中顶栏 | 换到状态行右侧，行为不变 | 三张进行中图 |
 | P8 | 交卷后对照与五维 | 详情折叠区展开 | 从长页改为折叠，数据只读后端 | `interview-panel-flat-detail-scored.png` |
@@ -149,15 +152,57 @@ stateDiagram-v2
 
 待答：三个分区可点开，内容为「待作答 / 待对照 / 五维 —」，对照 `interview-panel-flat-detail.png`。已评：点开后展示后端作答、覆盖/缺口/评语、五维数字，对照 `interview-panel-flat-detail-scored.png`。折叠控件用 `button` + `aria-expanded`，MUST NOT 用 HTML `<details>`。
 
-### P5 生成中
+### P5 生成中（下一张卡槽）
 
-不写入 `cards[]`。在甲板末尾（或当前最新卡侧）插入 UI 槽：转圈 + 「正在生成本题」或「正在准备下一题」。旧卡仍可切回。要点完成后槽消失，新卡成为当前；若当时是详情态，进入新卡详情。
+不写入 `cards[]`。生成中是**即将到来的下一张卡**，不是把当前卡换成转圈页。
 
-触发（纯前端，不改 watch 契约）：
+详情（对照 `interview-panel-flat-live-update.png` 左栏）：
 
-1. `refreshing === true`
-2. 最新卡 `status === 'scored'`（等待下一问/下一张 pending 卡）
-3. 看守返回失败但甲板仍在：只显示错误条，不假装生成成功
+```text
+┌ ← 返回卡片流    模拟面试          × ┐
+│ ● 进行中 · 八股专项     [结束本场]  │
+│ Q2                                  │
+│ 短标题                   难度：中级 │
+│ 本题题干（当前卡正文，仍可读）      │
+│ ┌─────────────────────────────┐     │
+│ │         (橙圈)               │     │
+│ │     正在准备下一题…          │ ← 下一张卡槽
+│ └─────────────────────────────┘     │
+│ [作答 ▾] [对照 ▾] [评分 ▾]          │ ← 仍属当前卡
+│           ● ○ (+ghost) 左右滑动切换  │
+│ [← 上一题]              [下一题 →]  │
+└─────────────────────────────────────┘
+```
+
+流态：当前真卡仍在舞台中央可读；生成中白卡片占据下一张位置（即将滑入的邻卡）。MUST NOT 只在当前卡底下贴一条状态、把整张卡冻住。
+
+生成中时详情 MUST 把该槽留在分页指示之上的可视区；MUST NOT 用「标准答要点」长列表把槽挤出视口（产品图左栏在生成中不铺开要点列表；要点让到槽后或生成中不占满高度）。新卡就绪后槽消失，右栏那样展示新卡编号、题干、刷新本题与折叠区。
+
+触发（前端启发式，响应形状不变）：
+
+1. `refreshing === true` → 「正在生成本题…」
+2. 最新卡 `status === 'scored'` 且没有更新的 pending 卡 → 「正在准备下一题…」
+3. 看守失败但甲板仍在：只显示错误条，不假装生成成功
+
+看守时序（同一次进程可以连续做，但 MUST 拆成两次可观察更新）：
+
+```text
+作答可读 → 打分 → persist → 返回 updated（仅已评甲板）
+         → 面板画出下一张卡槽
+下一问说完 → brief → append pending → 返回 updated（新卡）
+         → 槽消失，跳到新卡
+```
+
+等待下一问的 in-flight 看守 MUST 分片重试打分；作答一旦可读就按上款先返回已评甲板，MUST NOT 卡到 brief 结束。已评后面试官尚未开口也可看到槽，可接受。
+
+### 看守拆分
+
+```text
+watch n:   score? ──yes, latest scored, no pending──► return scored-only
+watch n+1: await next question ──ready──► brief + append ──► return new pending
+```
+
+强制刷新：仍有 pending 则只重 brief 当前待答卡；最新卡已评且对话里已有下一问，则下一拍 append。刷新中按钮禁用，「正在生成本题…」。
 
 ### 共用顶栏
 
@@ -181,7 +226,7 @@ stateDiagram-v2
 - 位移超过约 48px 且水平大于垂直才切卡；垂直滚动详情正文优先。
 - 边界不循环。
 - 滑动只绑舞台，MUST NOT 关闭 overlay、MUST NOT `preventDefault` 到宿主输入框。
-- 分页点可点，点数 = `cards.length`（生成中 +1 不可点或点了仍停在最新真卡）。
+- 分页点可点，点数 = `cards.length`；生成中可 +1 不可点 ghost，点了仍停在最新真卡。
 - 新卡追加：跳到新卡。仅评分更新同一卡：不打断用户正在看的历史卡。
 - overlay 重开：流态 + 最新卡。
 
@@ -191,13 +236,17 @@ stateDiagram-v2
 - 当前卡编号徽章实心蓝；主按钮「下一题」实心蓝，白字；「上一题」白底描边。
 - 「查看完整内容」浅蓝色块，非第三聊天入口。
 - 进行中圆点绿。错误条保持现有红字 `role="alert"`。
+- 生成中下一张卡槽：白底、约 20px 圆角、轻阴影、橙色转圈、「正在准备下一题…」；刷新中改文案为「正在生成本题…」。
+- 生成中不得用整页 spinner 盖住当前卡；当前卡题干对比度可略降，但必须仍可读。
 - 抽屉宽度维持 `min(360px, 100%)`；流态用重叠与缩放做局部露出，不靠加宽宿主。
 
 ## Decisions
 
-### 1. 进行中只改呈现；入口只换壳与署名
+### 1. 进行中改呈现；看守只拆时序不拆契约
 
-`InterviewDeck` / `QuestionCard` / `watchCoachTurn` / `endRound` / `startInterview` 保持。`viewCardId` + 本地 `viewMode: 'flow' | 'detail'` 存在 `InProgressPanel` 内。`EntryPanel` 仍按 `deck` 有无切换入口/进行中；本刀改它的顶栏、动漫头像、副标题、页脚与间距，不改 port。
+`InterviewDeck` / `QuestionCard` / `WatchCoachTurnRequest` / `WatchCoachTurnResponse` / `endRound` / `startInterview` 字段保持。`viewCardId` + 本地 `viewMode: 'flow' | 'detail'` 存在 `InProgressPanel` 内。`EntryPanel` 仍按 `deck` 有无切换入口/进行中。
+
+看守实现可以改时序：已评且无 pending 时先 `updated` 返回，下一拍再 brief。这不是新端口。
 
 备选：后端下发 `viewMode` — 否决，纯 UI。备选：给卡加 `title` — 推迟，截断 `questionBrief`（优先第一行，上限约 16 字）。
 
@@ -207,11 +256,17 @@ stateDiagram-v2
 
 备选：几何 `x` 字标 — 否决，推广辨识度不够。备选：所有状态都打 xerina 水印 — 否决，挤卡片流。备选：可点外链主页 — 否决，插件内无运营页。
 
-### 2. 生成中是前端槽，不是第三种 `CardStatus`
+### 2. 生成中是前端下一张卡槽，不是第三种 `CardStatus`
 
-避免落盘出现「假卡」、避免结束时 `qa.md` 多出空节。最新卡已评即显示「正在准备下一题」，与产品「旧卡保留、生成中可见」一致；面试官尚未开口时也会看到占位，可接受。
+避免落盘假卡、避免 `qa.md` 多出空节。最新卡已评即显示「正在准备下一题…」。槽必须长得像下一张卡（产品图左栏），当前卡继续展示题干与折叠区。
 
-备选：watch 增加 `briefing` — 本刀不改后端。备选：答完立刻占位，不等等分 — 否决，评分仍要停在本题。
+备选：watch 增加 `briefing` 字段 — 否决，契约形状不变；用「已评先返回」让启发式成立。
+
+备选：答完立刻占位、不等等分 — 否决，评分仍要停在本题。
+
+备选：打分与 brief 同一次 `updated` — 否决，客户端看不到中间态，槽不会出现。
+
+备选：整卡转圈替换当前题 — 否决，产品是旧卡仍在、下一张正在生成。
 
 ### 3. 手势用指针事件，不引库
 
@@ -231,10 +286,12 @@ stateDiagram-v2
 
 - [Risk] 360px 抽屉里三张卡重叠过挤 → 邻卡只露 16–28px；单卡时不画假邻卡。
 - [Risk] 滑动误关 overlay 或误触宿主 → 事件停在舞台；overlay 继续 `fixed`。
-- [Risk] 已评后一直显示生成中、用户以为卡死 → 文案是「正在准备下一题」；结束本场仍可用；看守失败用错误条。
+- [Risk] 已评后一直显示生成中、用户以为卡死 → 文案是「正在准备下一题…」且能看见下一张卡槽；结束本场仍可用；看守失败用错误条。
 - [Risk] 新卡到达把用户从历史卡拽走 → 与产品「自动定位到最新卡」一致，只在 `cards` 增员时跳。
-- [Risk] 详情折叠让人以为没有要点 → 题干与要点默认展开；只折叠作答/对照/评分。
-- [Trade-off] 不改后端 briefing 信号 → 实现快，占位可能略早于面试官开口。
+- [Risk] 详情折叠让人以为没有要点 → 非生成中时题干与要点默认展开；只折叠作答/对照/评分。生成中让出要点高度，保证槽在视口内。
+- [Risk] 要点长列表把生成中槽挤出视口 → 生成中槽固定在题干与作答折叠之间，并限制要点占位。
+- [Trade-off] 不增加 briefing 字段 → 占位靠「最新卡已评」；看守必须先返回已评甲板。
+- [Trade-off] 生成中详情不铺开要点 → 对齐产品图左栏，避免当前卡看起来冻死。
 - [Trade-off] xerina 只打在入口 → 第一眼能推广，进行中保持既有三张图的密度。
 
 ## Migration Plan
@@ -245,4 +302,4 @@ stateDiagram-v2
 
 ## Open Questions
 
-无。短标题截断、生成中启发式、不引手势库、入口换壳 + 入口限定 xerina 署名已钉死。
+无。短标题截断、生成中启发式、看守两次返回、下一张卡形槽、不引手势库、入口 xerina 署名已钉死。

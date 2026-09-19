@@ -189,8 +189,10 @@ describe('InProgressPanel', () => {
     render(<InProgressPanel deck={scoredOnlyDeck} />);
     expect(screen.getByTestId('generating-next').textContent).toMatch(/正在准备下一题/);
     expect(screen.getByTestId('card-flow')).toBeDefined();
+    expect(screen.getByTestId('current-card')).toBeDefined();
     expect(screen.getByTestId('card-id').textContent).toBe('Q1');
     expect(screen.getByTestId('generating-next').getAttribute('role')).toBe('status');
+    expect(screen.getByTestId('card-flow').contains(screen.getByTestId('generating-next'))).toBe(true);
   });
 
   it('keeps generating-next on the card page in detail view', () => {
@@ -199,6 +201,13 @@ describe('InProgressPanel', () => {
     expect(screen.getByTestId('card-detail')).toBeDefined();
     expect(screen.getByTestId('generating-next').textContent).toMatch(/正在准备下一题/);
     expect(screen.queryByTestId('card-flow')).toBeNull();
+    expect(screen.queryByText('标准答要点')).toBeNull();
+    const stem = screen.getByText('本题题干');
+    const generating = screen.getByTestId('generating-next');
+    const answerFold = screen.getByRole('button', { name: '作答' });
+    expect(stem.compareDocumentPosition(generating) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(generating.compareDocumentPosition(answerFold) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('请说明聚簇索引。')).toBeDefined();
   });
 
   it('shows generating-next while refreshing a pending card', () => {

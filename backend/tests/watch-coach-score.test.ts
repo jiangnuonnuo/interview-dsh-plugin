@@ -57,10 +57,17 @@ describe('watchCoachTurnSession scoring', () => {
 
   it('scores the pending card when a later human answer appears', async () => {
     const examSessions = seedStore();
+    const awaitNewQuestion = jest.fn(async () => ({
+      ok: true as const,
+      status: 'ready' as const,
+      text: '二级索引如何回表？',
+    }));
+    const complete = jest.fn(async () => scoredJson);
     const result = await watchCoachTurnSession(
       stubCoach({
         readLatestHuman: async () => ({ ok: true, text: '叶子节点存的是整行。' }),
-        complete: async () => scoredJson,
+        awaitNewQuestion,
+        complete,
       }),
       examSessions,
       { sessionId: 'session-exam' },
@@ -68,12 +75,15 @@ describe('watchCoachTurnSession scoring', () => {
     expect(result.ok).toBe(true);
     if (result.ok && result.status === 'updated') {
       const card = result.deck.cards[0];
+      expect(result.deck.cards).toHaveLength(1);
       expect(card?.status).toBe('scored');
       expect(card?.answer).toBe('叶子节点存的是整行。');
       expect(card?.comparison?.comment).toBe('只讲了聚簇叶子');
       expect(card?.scores.every((item) => item.score === 3.5)).toBe(true);
       expect(card?.questionBrief).toBe('聚簇 vs 二级');
     }
+    expect(awaitNewQuestion).not.toHaveBeenCalled();
+    expect(complete).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the card pending when scores are incomplete', async () => {
@@ -134,40 +144,77 @@ describe('watchCoachTurnSession scoring', () => {
     expect(cards?.[0]?.scores[0]?.score).toBe(3.5);
   });
 
-  it('scores the pending card before appending the next question in the same watch', async () => {
+  it('scores an answer that arrives while waiting for the next question', async () => {
     const examSessions = seedStore();
     let human = '';
+    let waits = 0;
+    const complete = jest.fn(async () => scoredJson);
     const result = await watchCoachTurnSession(
       stubCoach({
         readLatestHuman: async () => ({ ok: true, text: human }),
         awaitNewQuestion: async () => {
-          human = '叶子节点存的是整行。';
-          return {
-            ok: true,
-            status: 'ready',
-            text: '二级索引如何回表？',
-          };
-        },
-        complete: async (_system, user) => {
-          if (user.includes('候选人作答')) {
-            return scoredJson;
+          waits += 1;
+          if (waits === 1) {
+            await new Promise((resolve) => {
+              setTimeout(resolve, 60);
+            });
+            human = '叶子节点存的是整行。';
           }
-          return '{"questionBrief":"二级索引回表","keyPoints":["先查二级再回聚簇"],"cardId":"Q1.1","relation":"followup"}';
+          return { ok: true as const, status: 'unchanged' as const };
         },
+        complete,
       }),
       examSessions,
       { sessionId: 'session-exam' },
     );
     expect(result.ok).toBe(true);
     if (result.ok && result.status === 'updated') {
-      expect(result.deck.cards).toHaveLength(2);
-      expect(result.deck.cards[0]?.id).toBe('Q1');
+      expect(result.deck.cards).toHaveLength(1);
       expect(result.deck.cards[0]?.status).toBe('scored');
       expect(result.deck.cards[0]?.answer).toBe('叶子节点存的是整行。');
-      expect(result.deck.cards[0]?.scores[0]?.score).toBe(3.5);
-      expect(result.deck.cards[1]?.id).toBe('Q1.1');
-      expect(result.deck.cards[1]?.status).toBe('pending');
-      expect(result.deck.currentCardId).toBe('Q1.1');
+    }
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(waits).toBe(1);
+  });
+
+  it('publishes the scored card before briefing the next question', async () => {
+    const examSessions = seedStore();
+    let human = '';
+    const runtime = stubCoach({
+      readLatestHuman: async () => ({ ok: true, text: human }),
+      awaitNewQuestion: async () => {
+        human = '叶子节点存的是整行。';
+        return {
+          ok: true,
+          status: 'ready',
+          text: '二级索引如何回表？',
+        };
+      },
+      complete: async (_system, user) => {
+        if (user.includes('候选人作答')) {
+          return scoredJson;
+        }
+        return '{"questionBrief":"二级索引回表","keyPoints":["先查二级再回聚簇"],"cardId":"Q1.1","relation":"followup"}';
+      },
+    });
+    const scored = await watchCoachTurnSession(runtime, examSessions, { sessionId: 'session-exam' });
+    expect(scored.ok).toBe(true);
+    if (scored.ok && scored.status === 'updated') {
+      expect(scored.deck.cards).toHaveLength(1);
+      expect(scored.deck.cards[0]?.id).toBe('Q1');
+      expect(scored.deck.cards[0]?.status).toBe('scored');
+      expect(scored.deck.cards[0]?.answer).toBe('叶子节点存的是整行。');
+      expect(scored.deck.cards[0]?.scores[0]?.score).toBe(3.5);
+    }
+
+    const next = await watchCoachTurnSession(runtime, examSessions, { sessionId: 'session-exam' });
+    expect(next.ok).toBe(true);
+    if (next.ok && next.status === 'updated') {
+      expect(next.deck.cards).toHaveLength(2);
+      expect(next.deck.cards[0]?.status).toBe('scored');
+      expect(next.deck.cards[1]?.id).toBe('Q1.1');
+      expect(next.deck.cards[1]?.status).toBe('pending');
+      expect(next.deck.currentCardId).toBe('Q1.1');
     }
   });
 

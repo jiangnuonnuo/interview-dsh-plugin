@@ -137,8 +137,19 @@ const RefreshButton = ({
   );
 };
 
-const GeneratingSlot = ({ refreshing }: { refreshing: boolean }) => (
-  <div className={styles.generating} data-testid="generating-next" role="status" aria-live="polite">
+const GeneratingSlot = ({
+  refreshing,
+  className,
+}: {
+  refreshing: boolean;
+  className?: string;
+}) => (
+  <div
+    className={className === undefined ? styles.generating : `${styles.generating} ${className}`}
+    data-testid="generating-next"
+    role="status"
+    aria-live="polite"
+  >
     <span className={styles.spinner} aria-hidden="true" />
     <span className={styles.generatingText}>{generatingLabel(refreshing)}</span>
   </div>
@@ -469,6 +480,11 @@ export const InProgressPanel = ({
                   goToIndex(index + 1);
                 }}
               />
+            ) : showGenerating ? (
+              <GeneratingSlot
+                refreshing={refreshing}
+                className={`${styles.peek} ${styles.peekNext} ${styles.generatingPeek}`}
+              />
             ) : null}
             <div
               className={styles.current}
@@ -507,7 +523,7 @@ export const InProgressPanel = ({
           </div>
         </div>
       ) : (
-        <div className={styles.detail} data-testid="card-detail">
+        <div className={`${styles.detail} ${showGenerating ? styles.detailGenerating : ''}`} data-testid="card-detail">
           <div className={styles.detailHead}>
             <span className={styles.detailId} data-testid="card-id">
               {card.id}
@@ -522,6 +538,7 @@ export const InProgressPanel = ({
             <h3 className={styles.block}>本题题干</h3>
             <p className={styles.brief}>{displayCardText(card.questionText)}</p>
           </section>
+          {showGenerating ? <GeneratingSlot refreshing={refreshing} /> : (
           <section className={styles.detailBlock}>
             <h3 className={styles.block}>标准答要点</h3>
             <ol className={styles.points}>
@@ -530,6 +547,7 @@ export const InProgressPanel = ({
               ))}
             </ol>
           </section>
+          )}
           <div key={card.id} className={styles.folds}>
             <FoldBlock title="作答" icon={<IconEdit />} blocked={justSwiped}>
               <p className={styles.brief} data-testid="card-answer">
@@ -562,7 +580,6 @@ export const InProgressPanel = ({
           </div>
         </div>
       )}
-      {showGenerating ? <GeneratingSlot refreshing={refreshing} /> : null}
       </div>
 
       <div className={styles.footer}>

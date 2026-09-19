@@ -2,6 +2,7 @@ import {
   accumulateWheelSwipe,
   generatingLabel,
   isSwipeIgnoredTarget,
+  shouldShowGenerating,
   swipeDirection,
   WHEEL_SWIPE_THRESHOLD,
 } from './card-view';
@@ -10,6 +11,12 @@ describe('card-view swipe helpers', () => {
   it('labels the generating card from the product copy', () => {
     expect(generatingLabel(false)).toBe('正在准备下一题…');
     expect(generatingLabel(true)).toBe('正在生成本题…');
+  });
+
+  it('shows generating when the latest card is scored or the user is refreshing', () => {
+    expect(shouldShowGenerating('scored', false)).toBe(true);
+    expect(shouldShowGenerating('pending', true)).toBe(true);
+    expect(shouldShowGenerating('pending', false)).toBe(false);
   });
 
   it('swipes next on a left drag and prev on a right drag', () => {

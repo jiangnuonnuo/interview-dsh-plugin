@@ -24,7 +24,7 @@
 - **THEN** 桌面验收任务保持未勾选，本 change MUST 保持未完成，MUST NOT 改写为视为通过
 
 ### Requirement: Coach panel refreshes on the pending interviewer question
-当考场对话中出现相对上一题发生变化的**当前待答问**，且该轮助手输出已经结束时，右侧面板 SHALL **追加一张新卡**并切到该卡，写入该待答问的题干摘要与标准答要点。标准答要点 MUST 在该待答问对用户可见后即可看见，MUST NOT 等到候选人再作答才刷新。在新卡开卷要点就绪之前，面板 MUST 继续展示上一张卡，MUST 展示生成中占位，MUST NOT 变成空白进行中，MUST NOT 删除或覆写已有卡片的对照与五维。生成中视觉 MUST 对齐 `docs/product-design/interview-panel-flat-live-update.png` 的结构（旧卡仍在、生成中可见）。面板 MUST NOT 由前端计算或判定分数。
+当考场对话中出现相对上一题发生变化的**当前待答问**，且该轮助手输出已经结束时，右侧面板 SHALL **追加一张新卡**并切到该卡，写入该待答问的题干摘要与标准答要点。标准答要点 MUST 在该待答问对用户可见后即可看见，MUST NOT 等到候选人再作答才刷新。在新卡开卷要点就绪之前，面板 MUST 继续展示上一张卡，MUST 展示下一张卡形生成中槽，MUST NOT 变成空白进行中，MUST NOT 把当前卡整页冻死，MUST NOT 删除或覆写已有卡片的对照与五维。生成中视觉 MUST 对齐 `docs/product-design/interview-panel-flat-live-update.png` 的结构（旧卡仍在、下一张卡槽可见）。面板 MUST NOT 由前端计算或判定分数。
 
 #### Scenario: Points follow the new question
 - **WHEN** 宿主对话中已出现与上一题不同的下一问，且面试官该轮已说完，且新卡开卷要点已生成
@@ -32,7 +32,7 @@
 
 #### Scenario: Previous snapshot remains until the new brief is ready
 - **WHEN** 候选人已作答，面试官下一问尚未说完或要点尚未生成
-- **THEN** 面板仍展示上一张卡的题干摘要入口，并可见生成中占位，MUST NOT 变成空白进行中
+- **THEN** 面板仍展示上一张卡的题干摘要入口，并可见下一张卡形生成中槽，MUST NOT 变成空白进行中，MUST NOT 只留下一张冻住的当前卡
 
 #### Scenario: Scoring stays a frontend placeholder
 - **WHEN** 面板因新题刷新
@@ -48,3 +48,20 @@
 #### Scenario: Manual refresh failure keeps the last snapshot
 - **WHEN** 候选人点击「刷新本题」但要点生成失败
 - **THEN** 面板展示错误信息，当前甲板（含上一张卡的题干、要点与已有评分）仍然可见
+
+## ADDED Requirements
+
+### Requirement: Watch publishes a scored deck before briefing the next card
+当最新待答卡因作答被评为已评，且甲板中不再有 pending 卡时，系统 SHALL 先把该已评甲板持久化，并作为一次 `watchCoachTurn` 成功更新返回给面板。该次返回 MUST NOT 同时追加下一张卡。下一张卡的开卷要点 SHALL 在随后的看守周期生成并追加。等待下一问期间若作答已可读取，系统 MUST 为本题打分并按上款返回，MUST NOT 把打分阻塞到下一问 brief 完成。请求与响应形状 MUST NOT 增加 `briefing` 字段，MUST NOT 增加第三种卡片状态。
+
+#### Scenario: First update after an answer is scored-only
+- **WHEN** 候选人已作答且本题打分完成，下一张卡的开卷要点尚未生成
+- **THEN** 面板收到的甲板最新卡为已评，卡片列表不含下一张 pending 卡
+
+#### Scenario: Next card arrives on a later update
+- **WHEN** 已评甲板已返回，随后面试官下一问说完且开卷要点生成成功
+- **THEN** 另一次成功更新追加新的 pending 卡，面板默认突出该新卡
+
+#### Scenario: Answer during wait is scored without waiting for the next brief
+- **WHEN** 看守正在等待下一问，且候选人作答已经可读取
+- **THEN** 系统为本题打分并返回已评甲板，MUST NOT 等到下一问 brief 完成后才返回分数

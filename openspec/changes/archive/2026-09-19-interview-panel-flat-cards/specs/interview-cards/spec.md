@@ -35,15 +35,25 @@
 - **THEN** 详情内容换成 `Q2`，仍为详情态，MUST NOT 因此打开聊天表面
 
 ### Requirement: Generating the next card keeps the existing deck visible
-当下一张卡的开卷要点尚未就绪时，进行中面板 MUST 继续展示已有卡片，MUST 展示生成中占位（文案为「正在生成本题」或「正在准备下一题」），MUST NOT 变成空白进行中，MUST NOT 删除或覆写已有卡的对照与五维。要点就绪后 MUST 追加新卡，且默认把当前卡定位到该新卡；若当时处于详情态，MUST 进入该新卡的详情，MUST NOT 无故退回入口。
+当下一张卡的开卷要点尚未就绪时，进行中面板 MUST 继续展示已有卡片，MUST 展示**下一张卡正在生成**的卡片形槽，MUST NOT 变成空白进行中，MUST NOT 把当前卡整页冻成唯一表面，MUST NOT 用整卡转圈替换当前题干，MUST NOT 删除或覆写已有卡的对照与五维。生成中视觉 MUST 对齐 `docs/product-design/interview-panel-flat-live-update.png`：白底大圆角卡、橙色转圈、文案为「正在准备下一题…」或刷新本题时「正在生成本题…」。
+
+详情态 MUST 同时可见当前卡编号、短标题、本题题干，以及作答 / 对照 / 评分折叠；生成中槽 MUST 插在本题题干与作答折叠之间，并留在舞台可视区内。生成中时 MUST NOT 用「标准答要点」长列表占满舞台把该槽挤出视口。流态 MUST 仍突出当前真卡，生成中槽占据下一张卡的位置（即将滑入的邻卡），不得只在当前卡底部贴一条状态。分页指示 MAY 增加一个不可点的生成中点；点了仍停在最新真卡。要点就绪后 MUST 追加新卡，槽消失，且默认把当前卡定位到该新卡；若当时处于详情态，MUST 进入该新卡的详情，MUST NOT 无故退回入口。
 
 #### Scenario: Generating placeholder appears before the new brief
-- **WHEN** 候选人已完成本题作答，或面试官下一问已出现，但新卡开卷要点尚未生成
-- **THEN** 已有卡仍可见，并可见生成中占位，面板 MUST NOT 清空
+- **WHEN** 候选人已完成本题作答且本题已评，或面试官下一问已出现，但新卡开卷要点尚未生成
+- **THEN** 已有卡仍可见，并可见下一张卡形生成中槽，面板 MUST NOT 清空
+
+#### Scenario: Generating looks like the next card not a frozen current card
+- **WHEN** 面板处于生成中（流态或详情态）
+- **THEN** 当前卡编号与题干仍可读、仍可切回历史卡；可见独立的 `generating-next` 卡片槽（转圈 + 「正在准备下一题」或「正在生成本题」）；MUST NOT 只显示当前卡而无下一张卡槽
+
+#### Scenario: Detail generating sits between stem and answer folds
+- **WHEN** 用户在详情态且下一张卡正在生成
+- **THEN** 本题题干之后、作答折叠之前可见生成中槽；作答 / 对照 / 评分折叠仍属于当前卡；生成中槽在分页指示之上可见
 
 #### Scenario: New card becomes current after brief
 - **WHEN** 新卡的开卷要点已生成
-- **THEN** 甲板含该新卡，面板默认突出该新卡（流态为当前卡，详情态则展示该新卡详情）
+- **THEN** 甲板含该新卡，生成中槽消失，面板默认突出该新卡（流态为当前卡，详情态则展示该新卡详情）
 
 ## MODIFIED Requirements
 

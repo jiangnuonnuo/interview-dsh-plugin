@@ -195,7 +195,32 @@ export const watchCoachTurnSession = async (
     return true;
   };
 
+  const publishIfWaitingForNextBrief = async () => {
+    const latest = deck.cards[deck.cards.length - 1];
+    if (!changed || latest?.status !== 'scored' || lastPending(deck) !== undefined) {
+      return undefined;
+    }
+    return persistAndReturn();
+  };
+
+  const briefNewQuestion = async (questionText: string) => {
+    if (isRoundClosingText(questionText)) {
+      return { ok: true as const, status: 'unchanged' as const };
+    }
+    await scorePendingIfAnswered();
+    const published = await publishIfWaitingForNextBrief();
+    if (published !== undefined) {
+      return published;
+    }
+    await appendNewCard(questionText);
+    return undefined;
+  };
+
   await scorePendingIfAnswered();
+  const scoredOnly = await publishIfWaitingForNextBrief();
+  if (scoredOnly !== undefined) {
+    return scoredOnly;
+  }
 
   if (request.force === true) {
     const latest = await runtime.readLatestQuestion(request.sessionId);
@@ -221,23 +246,44 @@ export const watchCoachTurnSession = async (
         changed = true;
       }
     } else if (latest.text !== lastQuestionText) {
-      await scorePendingIfAnswered();
-      await appendNewCard(latest.text);
+      const published = await briefNewQuestion(latest.text);
+      if (published !== undefined) {
+        return published;
+      }
     }
   } else {
-    const waited = await runtime.awaitNewQuestion(request.sessionId, lastQuestionText, {
-      timeoutMs: clock.timeoutMs ?? WATCH_COACH_TURN_TIMEOUT_MS,
-      pollMs: clock.pollMs,
-    });
-    if (!waited.ok) {
-      return { ...waited, deck };
-    }
-    if (waited.status === 'ready') {
-      if (isRoundClosingText(waited.text)) {
-        return { ok: true, status: 'unchanged' };
+    const timeoutMs = clock.timeoutMs ?? WATCH_COACH_TURN_TIMEOUT_MS;
+    const sliceMs = Math.min(pollMs, timeoutMs);
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const remaining = deadline - Date.now();
+      const waitMs = Math.min(sliceMs, remaining);
+      if (waitMs <= 0) {
+        break;
+      }
+      const started = Date.now();
+      const waited = await runtime.awaitNewQuestion(request.sessionId, lastQuestionText, {
+        timeoutMs: waitMs,
+        pollMs: clock.pollMs,
+      });
+      if (!waited.ok) {
+        return { ...waited, deck };
+      }
+      if (waited.status === 'ready') {
+        const published = await briefNewQuestion(waited.text);
+        if (published !== undefined) {
+          return published;
+        }
+        break;
       }
       await scorePendingIfAnswered();
-      await appendNewCard(waited.text);
+      const published = await publishIfWaitingForNextBrief();
+      if (published !== undefined) {
+        return published;
+      }
+      if (Date.now() - started < Math.min(50, waitMs)) {
+        break;
+      }
     }
   }
 
