@@ -19,7 +19,7 @@ Desktop profile：`web`
 - 已装用户不会自动升级：先 `remove` 再 `add` 新 SHA，再重启。
 - 目录页只钉首发 commit，同一仓库不要再提交。目录 SHA 可以落后于 README；推广时说清装的是哪一版。
 - 禁止把 `git clone`、`npm run build`、`dsh plugin add ./` 写成候选人安装。不要 `npm publish`。
-- `listed` 不是官方审核。README / 推广文案必须跟这一版 SHA 一致，不得再写「尚未收录」。
+- `listed` 不是官方审核。README / 推广文案必须跟这一版 SHA 一致，不得再写「尚未收录」。推广海报是 `doc/sum.png`：海报里的安装命令、README 主安装命令、本文 §2 必须是同一条 SHA。换 SHA 后若海报未重出，不得继续把旧海报当本版安装说明。
 
 ## 2. 当前对外版本
 
@@ -82,7 +82,8 @@ git status
 # 4. 取出这一版 SHA
 git rev-parse HEAD
 
-# 5. 用上一步的 40 位 SHA 替换：本文 §2、README 安装/等价命令
+# 5. 用上一步的 40 位 SHA 替换：本文 §2、README 安装/等价命令；
+#    若 `doc/sum.png` 内嵌了安装命令，同步重出海报后再提交
 #    再提交一次文档，例如：
 # git commit -m "docs: 钉死 0.2.0 安装命令"
 

@@ -76,6 +76,8 @@
 
 其它已有功能点的状态图（不是新能力，只补视觉）在 `docs/product-design/`：首题单卡、已评详情、自定义主题、缺主题错误、开始中、打开失败、进行中错误、结束回入口。头像真源 [xerina-avatar.png](../product-design/xerina-avatar.png)。产品图若有错字，功能文案以 OpenSpec 为准。
 
+对外宣传海报是 [`doc/sum.png`](../../doc/sum.png)，给 README 和社交传播用，**不是**教练面板视觉真源。海报文案（题库、Token、吉祥物）不得当成产品能力或入口署名；面板仍只以本节与 `docs/product-design/` 为准。发新版时海报里的安装 SHA 必须与 `docs/product/DISTRIBUTION.md` §2、README 安装命令一致。
+
 上述图片是产品视觉方向，不是新增功能清单。入口功能仍是搜主题、选难度、开始；不得增加聊天输入框、提示/跳过、计时器、场级仪表盘或其它未定义能力。入口署名固定为 `xerina`（圆形头像必须裁剪 [xerina-avatar.png](../product-design/xerina-avatar.png)，入口图 [interview-panel-flat-entry.png](../product-design/interview-panel-flat-entry.png) 已贴该真源；副标题 `xerina · 八股专项陪练`，页脚 `coach by xerina`），作为个人品牌推广，不得改成其它人名、另绘脸或做成独立运营后台。头像与署名不可点击。
 
 仍不做（要调整就先改本节，再开或改 change）：时长与倒计时、目录选择、跑题处理、项目深挖、混合模式、预置死题库、音视频、云归档、面板上的提示/跳过、场级长简报。
