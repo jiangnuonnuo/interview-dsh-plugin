@@ -3,6 +3,7 @@
 本文是工程落地的依据：系统怎么拆、依赖朝哪边、DSH 怎么接、代码怎么写。
 
 - 产品定位与使用者见 `docs/product/REQUIREMENTS.md`，不要用本文改写成产品说明书。
+- 每次大版本的发版流程与规则见 `docs/product/DISTRIBUTION.md`；本文只锁 `lib/` 作为安装器表面。
 - 当前能力、交互和验收以 OpenSpec change 为准，不要用本文锁死产品主链路。
 - 插件形态边界与提交评审见 `AGENTS.md`；已否决的做法见 `docs/FORBIDDEN.md`。
 

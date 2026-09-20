@@ -74,13 +74,13 @@ flowchart LR
 把插件装进 Desktop 正在使用的 profile（一般是 `web`）。下面这条钉死当前可安装 commit：
 
 ```bash
-npx dshpub add jiangnuonnuo/interview-dsh-plugin --ref 95b638da9c984b1f631208adeda1681ff0679a00 --profile web
+npx dshpub add jiangnuonnuo/interview-dsh-plugin --ref f54ce0dedcdd33ffc4da019e063ffa45280cae07 --profile web
 ```
 
 等价：
 
 ```bash
-dsh plugin --profile web add github:jiangnuonnuo/interview-dsh-plugin#95b638da9c984b1f631208adeda1681ff0679a00
+dsh plugin --profile web add github:jiangnuonnuo/interview-dsh-plugin#f54ce0dedcdd33ffc4da019e063ffa45280cae07
 ```
 
 安装后**重启 DSH Desktop**，输入栏右侧会出现「面试」。不要 `git clone` 再本地 `npm run build` 来当普通安装步骤。
@@ -91,7 +91,7 @@ dsh plugin --profile web add github:jiangnuonnuo/interview-dsh-plugin#95b638da9c
 dsh plugin --profile web remove interview-dsh
 ```
 
-本仓库可以提交到 [dsh.pub](https://dsh.pub/zh/submit/)，但**尚未**作为已收录目录条目来宣传。收录后目录页会给出钉死的 `npx dshpub add` 命令。
+已收录：[dsh.pub 目录页](https://dsh.pub/zh/plugins/interview-dsh/)。大版本怎么发、升级命令见 `docs/product/DISTRIBUTION.md`。
 
 ## 开发约定
 

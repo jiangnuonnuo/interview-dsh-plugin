@@ -7,6 +7,7 @@ context: |
 
   interview-dsh is a DeepSeek Harness (DSH) plugin, not a standalone app.
   Product: docs/product/REQUIREMENTS.md.
+  Product release process: docs/product/DISTRIBUTION.md.
   Architecture: docs/architecture/ARCHITECTURE.md.
   Coding constraints: AGENTS.md.
   Interviewer behavior: interviewer-role-prompt.md.

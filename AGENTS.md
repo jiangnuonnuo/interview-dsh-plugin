@@ -6,6 +6,7 @@
 - 修改前先确认功能所属分层、模块职责和依赖方向。
 - 实现与架构文档冲突时，先改架构并说明原因，不得自行绕过。
 - 产品方向见 [产品文档](docs/product/REQUIREMENTS.md)；当前能力与验收以 OpenSpec change 为准。
+- 每次大版本怎么对外发布：见 [分发文档](docs/product/DISTRIBUTION.md)。流程与规则只在那份文档，本文件不复制。
 - 已否决的做法与错误边界见 [禁区清单](docs/FORBIDDEN.md)，不要重试；本机版本事实也在那里。
 - 本文件是全局规范，不是思考记录：单个 change 的方案取舍、调试结论、一次性说明不写在这里，进对应 change 制品或 [OpenSpec 配置](openspec/config.yaml) 的 `context`。
 
