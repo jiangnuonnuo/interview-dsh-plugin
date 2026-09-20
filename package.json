@@ -1,13 +1,14 @@
 {
   "name": "interview-dsh",
   "version": "0.1.0",
-  "private": true,
+  "license": "MIT",
   "type": "module",
-  "main": "./backend/dist/index.js",
+  "main": "./lib/index.js",
   "exports": {
-    ".": "./backend/dist/index.js",
-    "./client": "./frontend/dist/client.js",
-    "./typert": "./backend/dist/typert.host.js",
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./typert": "./lib/typert.host.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "dsh": {
@@ -25,9 +26,10 @@
     }
   },
   "files": [
-    "backend/dist",
-    "frontend/dist/client.js",
-    "cordis.patch.yml"
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
   ],
   "workspaces": [
     "backend",
@@ -35,11 +37,12 @@
     "shared"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
-    "test": "npm run test --workspaces",
+    "build": "npm run build --workspaces && npm run bundle",
+    "bundle": "node scripts/bundle-lib.mjs",
+    "test": "npm run test --workspaces && node --test scripts/pack-contract.test.mjs",
     "lint": "npm run lint --workspaces"
   },
-  "dependencies": {
-    "interview-dsh-shared": "*"
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }

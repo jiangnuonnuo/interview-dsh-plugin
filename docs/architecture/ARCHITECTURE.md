@@ -31,7 +31,8 @@ DSH Web
 backend/     TypeScript：用例入口、领域服务、落盘、DSH Host 适配
 frontend/    React 面板；DSH Web Client 适配在 src/infra/dsh/
 shared/      前后端共享类型与错误码，无业务逻辑
-cordis.patch.yml / 根 package.json 的 dsh.bundle  组合包清单（不是业务目录）
+lib/         安装器加载的 Host/Client 运行产物（由 build 生成并提交）
+cordis.patch.yml / 根 package.json 的 dsh.bundle  组合包清单与分发边界
 docs/product/REQUIREMENTS.md
 docs/architecture/ARCHITECTURE.md   本文
 openspec/    实现 change
@@ -42,9 +43,10 @@ openspec/    实现 change
 | `backend/` | 会话、提示词组装、校验、落盘、Host 适配 |
 | `frontend/` | 入口与评估面板、Client 适配 |
 | `shared/` | 跨端类型、API 契约、稳定错误码 |
-| 根清单 | 声明 Host/Client 组合包 |
+| `lib/` | 分发用运行入口；DSH `plugin add` 加载这里，不加载 workspace `dist/` |
+| 根清单 | 声明 Host/Client 组合包，也是 Git/tarball 安装单元 |
 
-新文件必须落到对应目录。仓库根的 `package.json` / `cordis.patch.yml` 只作 DSH 组合包清单。
+新文件必须落到对应目录。`backend/` / `frontend/` / `shared/` 与各自 `dist/` 只服务开发与单测。仓库根的 `package.json` / `cordis.patch.yml` 是 DSH 组合包清单；安装器只解析根包 `main`、`exports` 与 `files` 里的 `lib/`。
 
 ## 3. 分层与依赖
 
@@ -67,14 +69,14 @@ frontend/infra/dsh            backend/infra/dsh
 - `services/`：用例与领域规则（配置校验、提示词模板化、会话编排）。不 import Host SDK。
 - `data/`：内存或工作区持久化。不引用 DSH。
 - `infra/dsh/`：唯一可调用 Host API 的地方（Agent 注入、轮次、Typert、工作区文件、插件生命周期）。
-- 根包 `main` 指向 `backend/dist/index.js`，该模块必须导出 `apply` 与 `name`。`backend/tsconfig.json` 的 `rootDir` 必须是 `./src`，否则 dist 布局对不上、插件树起不来。
+- 根包 `main` 指向 `lib/index.js`（打包时内联 `shared` 与运行时依赖），该模块必须导出 `apply` 与 `name`，禁止 default export。`backend/tsconfig.json` 的 `rootDir` 必须是 `./src`，workspace `dist/` 只给开发单测，安装器不读它。
 
 ### 3.2 前端
 
 - React + TypeScript + Hooks。禁止无说明的 `any`。
 - 只通过 `shared/` + 官方 `ctx.remote`（或等价桥接）调后端，禁止 `fetch('/api/...')`。
 - 功能放在 `frontend/src/features/`，通过 port 接口拿数据；DSH Web Client API 只出现在 `frontend/src/infra/dsh/`。
-- 样式：当前入口使用 CSS Modules。Client 构建必须把样式内联进 `frontend/dist/client.js`（DSH 只加载该文件，不加载旁路 `style.css`）。新增 UI 库或改用 Tailwind 须在对应 OpenSpec change 里说明。
+- 样式：当前入口使用 CSS Modules。Client 构建把样式内联进 `frontend/dist/client.js`，再复制为 `lib/client.js`（DSH 只加载根包 `exports["./client"]`，不加载旁路 `style.css`）。新增 UI 库或改用 Tailwind 须在对应 OpenSpec change 里说明。
 
 ### 3.3 shared
 

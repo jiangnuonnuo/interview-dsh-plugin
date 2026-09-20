@@ -69,16 +69,29 @@ flowchart LR
 | 结束回入口 | 本轮结束，可再开一轮 | ![结束](docs/product-design/interview-panel-flat-round-ended.png) |
 | 打开失败 | 回退面板 / 可见错误层 | ![打开失败](docs/product-design/interview-panel-flat-open-error.png) |
 
-## 快速开始
+## 安装
+
+把 `<commit>` 换成 [jiangnuonnuo/interview-dsh-plugin](https://github.com/jiangnuonnuo/interview-dsh-plugin) 默认分支上含 `lib/` 的 40 位 commit，然后装进 Desktop 正在使用的 profile（一般是 `web`）：
 
 ```bash
-git clone https://github.com/xerina/interview-dsh.git
-cd interview-dsh
-npm install
-npm run build
+npx dshpub add jiangnuonnuo/interview-dsh-plugin --ref <commit> --profile web
 ```
 
-本地开发完成后，通过 DSH 的插件配置引入本仓库路径即可加载。
+等价：
+
+```bash
+dsh plugin --profile web add github:jiangnuonnuo/interview-dsh-plugin#<commit>
+```
+
+安装后**重启 DSH Desktop**，输入栏右侧会出现「面试」。不要 `git clone` 再本地 `npm run build` 来当普通安装步骤。
+
+卸载：
+
+```bash
+dsh plugin --profile web remove interview-dsh
+```
+
+本仓库可以提交到 [dsh.pub](https://dsh.pub/zh/submit/)，但**尚未**作为已收录目录条目来宣传。收录后目录页会给出钉死的 `npx dshpub add` 命令。
 
 ## 开发约定
 
@@ -88,6 +101,18 @@ npm run build
 - 分层与目录结构必须遵守架构文档；新文件必须落到对应目录。
 - 发现架构文档与实现冲突时，先改架构并说明原因，不得自行绕过。
 - 禁止把本机 Desktop 安装目录写进仓库。
+
+## 本地开发
+
+```bash
+git clone https://github.com/jiangnuonnuo/interview-dsh-plugin.git
+cd interview-dsh-plugin
+npm install
+npm run build
+dsh plugin --profile web add ./
+```
+
+`npm run build` 会构建 workspaces 并把安装器用的 `lib/` 写好。改 Host/Client 后要再跑一遍，否则 Desktop 仍加载旧的 `lib/`。
 
 ## 贡献指南
 
