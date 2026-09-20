@@ -71,16 +71,16 @@ flowchart LR
 
 ## 安装
 
-把 `<commit>` 换成 [jiangnuonnuo/interview-dsh-plugin](https://github.com/jiangnuonnuo/interview-dsh-plugin) 默认分支上含 `lib/` 的 40 位 commit，然后装进 Desktop 正在使用的 profile（一般是 `web`）：
+把插件装进 Desktop 正在使用的 profile（一般是 `web`）。下面这条钉死当前可安装 commit：
 
 ```bash
-npx dshpub add jiangnuonnuo/interview-dsh-plugin --ref <commit> --profile web
+npx dshpub add jiangnuonnuo/interview-dsh-plugin --ref 95b638da9c984b1f631208adeda1681ff0679a00 --profile web
 ```
 
 等价：
 
 ```bash
-dsh plugin --profile web add github:jiangnuonnuo/interview-dsh-plugin#<commit>
+dsh plugin --profile web add github:jiangnuonnuo/interview-dsh-plugin#95b638da9c984b1f631208adeda1681ff0679a00
 ```
 
 安装后**重启 DSH Desktop**，输入栏右侧会出现「面试」。不要 `git clone` 再本地 `npm run build` 来当普通安装步骤。
