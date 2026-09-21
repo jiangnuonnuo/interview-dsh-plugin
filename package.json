@@ -1,6 +1,6 @@
 {
   "name": "interview-dsh",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "license": "MIT",
   "type": "module",
   "main": "./lib/index.js",

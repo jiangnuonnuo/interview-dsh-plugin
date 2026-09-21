@@ -22,13 +22,13 @@
 把插件装进 Desktop 正在使用的 profile（一般是 `web`）。下面这条钉死当前可安装 commit：
 
 ```bash
-npx dshpub add jiangnuonnuo/interview-dsh-plugin --ref f54ce0dedcdd33ffc4da019e063ffa45280cae07 --profile web
+npx dshpub add jiangnuonnuo/interview-dsh-plugin --ref 5c97af374752ef87bef27f498359f777c8bf8242 --profile web
 ```
 
 等价：
 
 ```bash
-dsh plugin --profile web add github:jiangnuonnuo/interview-dsh-plugin#f54ce0dedcdd33ffc4da019e063ffa45280cae07
+dsh plugin --profile web add github:jiangnuonnuo/interview-dsh-plugin#5c97af374752ef87bef27f498359f777c8bf8242
 ```
 
 安装后**完全退出并重启 DSH Desktop**。输入栏右侧「AI 优化」旁出现「面试」才算装上。不要 `git clone` 再本地 `npm run build` 来当普通安装步骤。
@@ -92,6 +92,13 @@ flowchart LR
 - **一条命令安装**：钉死 commit，重启 Desktop 后输入栏右侧出现「面试」。
 
 工作方式：考场会话挂在项目分组下，不干扰正在写代码的对话；评分提示词不进气泡；本轮 `qa.md` 与 `summary.md` 写入工作区 `.dsh-interview/`，可导入笔记库。
+
+## 更新日志
+
+### 1.0.1
+
+- **新增**：卡片流「正在生成」状态提醒 —— 新题出现后，旧卡保留并展示生成中状态，避免重复出题或状态丢失。
+- **测试补充**：`InProgressPanel` 与 `card-view` 单测覆盖生成态分支。
 
 ## 产品界面
 
