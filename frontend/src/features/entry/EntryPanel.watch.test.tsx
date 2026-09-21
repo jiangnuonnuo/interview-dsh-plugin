@@ -174,7 +174,7 @@ describe('EntryPanel watchCoachTurn', () => {
     expect(scores.textContent).not.toMatch(/\d/);
   });
 
-  it('shows generating-next when watch returns a scored deck without a new card', async () => {
+  it('keeps scored-card detail readable when watch returns without a new card', async () => {
     const { port, resolve } = createDeferredWatchPort();
     await startExam(port);
     openDetail();
@@ -197,11 +197,52 @@ describe('EntryPanel watchCoachTurn', () => {
       resolve({ ok: true, status: 'updated', deck: scoredDeck });
     });
     await waitFor(() => {
-      expect(screen.getByTestId('generating-next').textContent).toMatch(/正在准备下一题/);
+      expect(screen.getByRole('heading', { name: '标准答要点' })).toBeDefined();
+      expect(screen.queryByTestId('generating-next')).toBeNull();
     });
     expect(screen.getByTestId('card-detail')).toBeDefined();
     expect(screen.getByText('请说明聚簇索引。')).toBeDefined();
+    expect(screen.getByText('聚簇索引叶子即行')).toBeDefined();
+    expand('作答');
+    expect(screen.getByTestId('card-answer').textContent).toMatch(/叶子即行/);
     expect(screen.getByTestId('card-id').textContent).toBe('Q1');
+    fireEvent.click(screen.getByTestId('back-to-flow'));
+    expect(screen.getByTestId('generating-next').textContent).toMatch(/正在准备下一题/);
+    openDetail();
+    expect(screen.getByTestId('card-detail')).toBeDefined();
+    expect(screen.queryByTestId('generating-next')).toBeNull();
+    expect(screen.getByRole('heading', { name: '标准答要点' })).toBeDefined();
+  });
+
+  it('opens current-card detail from flow while next is generating', async () => {
+    const { port, resolve } = createDeferredWatchPort();
+    await startExam(port);
+    const scoredDeck = createInterviewDeck({
+      sessionId: 'session-exam',
+      topic: 'MySQL 索引与优化',
+      difficulty: 'mid',
+      cards: [
+        {
+          ...firstCard,
+          status: 'scored' as const,
+          answer: '叶子即行',
+          comparison: { covered: ['聚簇索引叶子即行'], missed: [], comment: '可以' },
+          scores: BAGUA_SCORE_DIMENSIONS.map((dimension) => ({ dimension, score: 3.5 })),
+        },
+      ],
+      currentCardId: 'Q1',
+    });
+    await act(async () => {
+      resolve({ ok: true, status: 'updated', deck: scoredDeck });
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('generating-next').textContent).toMatch(/正在准备下一题/);
+    });
+    expect(screen.getByTestId('card-flow')).toBeDefined();
+    openDetail();
+    expect(screen.getByTestId('card-detail')).toBeDefined();
+    expect(screen.queryByTestId('generating-next')).toBeNull();
+    expect(screen.getByRole('heading', { name: '标准答要点' })).toBeDefined();
   });
 
   it('keeps the previous deck when refresh fails', async () => {

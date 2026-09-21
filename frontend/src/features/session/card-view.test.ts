@@ -2,7 +2,8 @@ import {
   accumulateWheelSwipe,
   generatingLabel,
   isSwipeIgnoredTarget,
-  shouldShowGenerating,
+  shouldShowNextGenerating,
+  shouldShowRefreshGenerating,
   swipeDirection,
   WHEEL_SWIPE_THRESHOLD,
 } from './card-view';
@@ -13,10 +14,17 @@ describe('card-view swipe helpers', () => {
     expect(generatingLabel(true)).toBe('正在生成本题…');
   });
 
-  it('shows generating when the latest card is scored or the user is refreshing', () => {
-    expect(shouldShowGenerating('scored', false)).toBe(true);
-    expect(shouldShowGenerating('pending', true)).toBe(true);
-    expect(shouldShowGenerating('pending', false)).toBe(false);
+  it('shows next-card generating only while viewing the latest scored card', () => {
+    expect(shouldShowNextGenerating({ viewingLatest: true, latestStatus: 'scored' })).toBe(true);
+    expect(shouldShowNextGenerating({ viewingLatest: false, latestStatus: 'scored' })).toBe(false);
+    expect(shouldShowNextGenerating({ viewingLatest: true, latestStatus: 'pending' })).toBe(false);
+    expect(shouldShowNextGenerating({ viewingLatest: true, latestStatus: undefined })).toBe(false);
+  });
+
+  it('shows refresh generating only on the card being refreshed', () => {
+    expect(shouldShowRefreshGenerating({ viewingTarget: true, refreshing: true })).toBe(true);
+    expect(shouldShowRefreshGenerating({ viewingTarget: false, refreshing: true })).toBe(false);
+    expect(shouldShowRefreshGenerating({ viewingTarget: true, refreshing: false })).toBe(false);
   });
 
   it('swipes next on a left drag and prev on a right drag', () => {

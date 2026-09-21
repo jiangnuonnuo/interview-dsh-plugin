@@ -7,7 +7,8 @@ import {
   displayCardText,
   generatingLabel,
   isSwipeIgnoredTarget,
-  shouldShowGenerating,
+  shouldShowNextGenerating,
+  shouldShowRefreshGenerating,
   swipeDirection,
   SWIPE_LOCK_PX,
   WHEEL_SWIPE_COOLDOWN_MS,
@@ -266,7 +267,16 @@ export const InProgressPanel = ({
   const previous = deck.cards[index - 1];
   const next = deck.cards[index + 1];
   const latest = deck.cards[deck.cards.length - 1];
-  const showGenerating = shouldShowGenerating(latest?.status, refreshing);
+  const viewingLatest = latest !== undefined && card.id === latest.id;
+  const showNextGenerating = shouldShowNextGenerating({
+    viewingLatest,
+    latestStatus: latest?.status,
+  });
+  const showRefreshGenerating = shouldShowRefreshGenerating({
+    viewingTarget: card.status === 'pending' && card.id === deck.currentCardId,
+    refreshing,
+  });
+  const showFlowGenerating = next === undefined && (showNextGenerating || showRefreshGenerating);
 
   const openDetail = () => {
     setViewMode('detail');
@@ -480,9 +490,9 @@ export const InProgressPanel = ({
                   goToIndex(index + 1);
                 }}
               />
-            ) : showGenerating ? (
+            ) : showFlowGenerating ? (
               <GeneratingSlot
-                refreshing={refreshing}
+                refreshing={showRefreshGenerating}
                 className={`${styles.peek} ${styles.peekNext} ${styles.generatingPeek}`}
               />
             ) : null}
@@ -523,7 +533,7 @@ export const InProgressPanel = ({
           </div>
         </div>
       ) : (
-        <div className={`${styles.detail} ${showGenerating ? styles.detailGenerating : ''}`} data-testid="card-detail">
+        <div className={`${styles.detail}${showRefreshGenerating ? ` ${styles.detailGenerating}` : ''}`} data-testid="card-detail">
           <div className={styles.detailHead}>
             <span className={styles.detailId} data-testid="card-id">
               {card.id}
@@ -538,7 +548,9 @@ export const InProgressPanel = ({
             <h3 className={styles.block}>本题题干</h3>
             <p className={styles.brief}>{displayCardText(card.questionText)}</p>
           </section>
-          {showGenerating ? <GeneratingSlot refreshing={refreshing} /> : (
+          {showRefreshGenerating ? (
+            <GeneratingSlot refreshing />
+          ) : (
           <section className={styles.detailBlock}>
             <h3 className={styles.block}>标准答要点</h3>
             <ol className={styles.points}>
@@ -597,7 +609,7 @@ export const InProgressPanel = ({
               }}
             />
           ))}
-          {showGenerating ? <span className={styles.pageDotGhost} aria-hidden="true" /> : null}
+          {showNextGenerating ? <span className={styles.pageDotGhost} aria-hidden="true" /> : null}
         </div>
         <p className={styles.swipeHint}>左右滑动切换</p>
         <div className={styles.nav}>

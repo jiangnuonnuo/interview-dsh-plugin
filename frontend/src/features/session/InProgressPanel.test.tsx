@@ -53,6 +53,22 @@ const twoCardDeck = createInterviewDeck({
   currentCardId: 'Q2',
 });
 
+const q2Scored = {
+  ...q2,
+  answer: '先回表。',
+  comparison: { covered: ['先查二级再回聚簇'], missed: [], comment: '可以' },
+  scores: BAGUA_SCORE_DIMENSIONS.map((dimension) => ({ dimension, score: 4 })),
+  status: 'scored' as const,
+};
+
+const twoScoredDeck = createInterviewDeck({
+  sessionId: 'session-exam',
+  topic: 'MySQL 索引与优化',
+  difficulty: 'mid',
+  cards: [scored, q2Scored],
+  currentCardId: 'Q2',
+});
+
 const openDetail = () => {
   fireEvent.click(screen.getByTestId('open-card-detail'));
 };
@@ -195,19 +211,36 @@ describe('InProgressPanel', () => {
     expect(screen.getByTestId('card-flow').contains(screen.getByTestId('generating-next'))).toBe(true);
   });
 
-  it('keeps generating-next on the card page in detail view', () => {
+  it('opens scored-card detail with key points while next is generating', () => {
     render(<InProgressPanel deck={scoredOnlyDeck} />);
+    expect(screen.getByTestId('generating-next').textContent).toMatch(/正在准备下一题/);
     openDetail();
     expect(screen.getByTestId('card-detail')).toBeDefined();
-    expect(screen.getByTestId('generating-next').textContent).toMatch(/正在准备下一题/);
+    expect(screen.queryByTestId('generating-next')).toBeNull();
     expect(screen.queryByTestId('card-flow')).toBeNull();
-    expect(screen.queryByText('标准答要点')).toBeNull();
-    const stem = screen.getByText('本题题干');
-    const generating = screen.getByTestId('generating-next');
-    const answerFold = screen.getByRole('button', { name: '作答' });
-    expect(stem.compareDocumentPosition(generating) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(generating.compareDocumentPosition(answerFold) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '标准答要点' })).toBeDefined();
+    expect(screen.getByText('聚簇索引叶子即行')).toBeDefined();
     expect(screen.getByText('请说明聚簇索引。')).toBeDefined();
+    expect(screen.getByRole('button', { name: '作答' })).toBeDefined();
+  });
+
+  it('lets the user open a history card detail while next is generating', () => {
+    render(<InProgressPanel deck={twoScoredDeck} />);
+    expect(screen.getByTestId('generating-next').textContent).toMatch(/正在准备下一题/);
+    expect(screen.getByTestId('card-id').textContent).toBe('Q2');
+    fireEvent.click(screen.getByRole('button', { name: '切换到Q1' }));
+    expect(screen.getByTestId('card-id').textContent).toBe('Q1');
+    expect(screen.queryByTestId('generating-next')).toBeNull();
+    openDetail();
+    expect(screen.getByTestId('card-detail')).toBeDefined();
+    expect(screen.getByText('请说明聚簇索引。')).toBeDefined();
+    expect(screen.getByRole('heading', { name: '标准答要点' })).toBeDefined();
+    expect(screen.getByText('聚簇索引叶子即行')).toBeDefined();
+    expect(screen.queryByTestId('generating-next')).toBeNull();
+    fireEvent.click(screen.getByTestId('back-to-flow'));
+    fireEvent.click(screen.getByTestId('next-card'));
+    expect(screen.getByTestId('card-id').textContent).toBe('Q2');
+    expect(screen.getByTestId('generating-next').textContent).toMatch(/正在准备下一题/);
   });
 
   it('shows generating-next while refreshing a pending card', () => {
@@ -215,6 +248,23 @@ describe('InProgressPanel', () => {
     expect(screen.getByTestId('generating-next').textContent).toMatch(/正在生成本题/);
     expect(screen.getByTestId('refresh-coach')).toHaveProperty('disabled', true);
     expect(screen.getByTestId('refresh-coach').textContent).toBe('刷新中');
+    expect(screen.getByTestId('open-card-detail')).toHaveProperty('disabled', false);
+    openDetail();
+    expect(screen.getByTestId('generating-next').textContent).toMatch(/正在生成本题/);
+    expect(screen.queryByRole('heading', { name: '标准答要点' })).toBeNull();
+  });
+
+  it('hides refresh generating after switching to a scored history card', () => {
+    render(<InProgressPanel deck={twoCardDeck} onRefresh={() => undefined} refreshing />);
+    expect(screen.getByTestId('card-id').textContent).toBe('Q2');
+    expect(screen.getByTestId('generating-next').textContent).toMatch(/正在生成本题/);
+    fireEvent.click(screen.getByTestId('prev-card'));
+    expect(screen.getByTestId('card-id').textContent).toBe('Q1');
+    expect(screen.queryByTestId('generating-next')).toBeNull();
+    openDetail();
+    expect(screen.getByRole('heading', { name: '标准答要点' })).toBeDefined();
+    expect(screen.getByText('聚簇索引叶子即行')).toBeDefined();
+    expect(screen.queryByTestId('generating-next')).toBeNull();
   });
 
   it('hides generating-next after a new pending card arrives', () => {
@@ -232,24 +282,7 @@ describe('InProgressPanel', () => {
     expect(screen.getByTestId('card-id').textContent).toBe('Q2');
     fireEvent.click(screen.getByTestId('prev-card'));
     expect(screen.getByTestId('card-id').textContent).toBe('Q1');
-    const q2Scored = {
-      ...q2,
-      answer: '先回表。',
-      comparison: { covered: ['先查二级再回聚簇'], missed: [], comment: '可以' },
-      scores: BAGUA_SCORE_DIMENSIONS.map((dimension) => ({ dimension, score: 4 })),
-      status: 'scored' as const,
-    };
-    rerender(
-      <InProgressPanel
-        deck={createInterviewDeck({
-          sessionId: 'session-exam',
-          topic: 'MySQL 索引与优化',
-          difficulty: 'mid',
-          cards: [scored, q2Scored],
-          currentCardId: 'Q2',
-        })}
-      />,
-    );
+    rerender(<InProgressPanel deck={twoScoredDeck} />);
     expect(screen.getByTestId('card-id').textContent).toBe('Q1');
   });
 

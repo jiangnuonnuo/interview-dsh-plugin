@@ -18,8 +18,21 @@ export const cardShortTitle = (questionBrief: string): string => {
   return `${chars.slice(0, CARD_TITLE_MAX).join('')}…`;
 };
 
-export const shouldShowGenerating = (latestStatus: CardStatus | undefined, refreshing: boolean): boolean =>
-  refreshing || latestStatus === 'scored';
+export const shouldShowNextGenerating = ({
+  viewingLatest,
+  latestStatus,
+}: {
+  viewingLatest: boolean;
+  latestStatus: CardStatus | undefined;
+}): boolean => viewingLatest && latestStatus === 'scored';
+
+export const shouldShowRefreshGenerating = ({
+  viewingTarget,
+  refreshing,
+}: {
+  viewingTarget: boolean;
+  refreshing: boolean;
+}): boolean => refreshing && viewingTarget;
 
 export const generatingLabel = (refreshing: boolean): string =>
   refreshing ? '正在生成本题…' : '正在准备下一题…';
