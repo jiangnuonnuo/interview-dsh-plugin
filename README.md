@@ -11,6 +11,8 @@
   <img src="doc/sum.png" alt="面试八股插件：你的 AI 面试陪练搭子。刷八股、问不倒、拿 Offer。" width="880" />
 </p>
 
+海报画面里的安装命令不是本版。安装以下面这条为准。
+
 <p align="center"><strong>你的 AI 面试陪练搭子 · 刷八股 · 问不倒 · 拿 Offer</strong></p>
 
 面试八股插件跑在 DeepSeek Harness（DSH）上，覆盖 Java、MySQL、Redis、消息队列、系统设计等常见八股主题。候选人已经在 DSH 里写代码、对话、选模型，练八股不必再开一个独立聊天产品。
@@ -22,13 +24,13 @@
 把插件装进 Desktop 正在使用的 profile（一般是 `web`）。下面这条钉死当前可安装 commit：
 
 ```bash
-npx dshpub add jiangnuonnuo/interview-dsh-plugin --ref 5c97af374752ef87bef27f498359f777c8bf8242 --profile web
+npx dshpub add jiangnuonnuo/interview-dsh-plugin --ref 25a9986f04d93ce84e0c500c606ec6647eeb590a --profile web
 ```
 
 等价：
 
 ```bash
-dsh plugin --profile web add github:jiangnuonnuo/interview-dsh-plugin#5c97af374752ef87bef27f498359f777c8bf8242
+dsh plugin --profile web add github:jiangnuonnuo/interview-dsh-plugin#25a9986f04d93ce84e0c500c606ec6647eeb590a
 ```
 
 安装后**完全退出并重启 DSH Desktop**。输入栏右侧「AI 优化」旁出现「面试」才算装上。不要 `git clone` 再本地 `npm run build` 来当普通安装步骤。
@@ -94,6 +96,12 @@ flowchart LR
 工作方式：考场会话挂在项目分组下，不干扰正在写代码的对话；评分提示词不进气泡；本轮 `qa.md` 与 `summary.md` 写入工作区 `.dsh-interview/`，可导入笔记库。
 
 ## 更新日志
+
+### 1.2.0
+
+- **作答对照**：一点没答上或缺口大时留在原卡，作答按 `a1`、`a2` 叠加并重算对照。同一题追深或拆开是 `Qn.m`。这层达到或换知识点，才是下一个正式问。不再按题数强制换题。
+- **知识链**：字段不合法时用同一题重试一次。仍不合法则按难度起手层补一条合法链并挂上，不再退回没有本题约束的人设。
+- **引导**：同一张卡最多两轮引导。引导是口语，不新开「【本题】」。
 
 ### 1.0.1
 
