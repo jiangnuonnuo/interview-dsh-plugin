@@ -19,6 +19,7 @@ describe('card-view swipe helpers', () => {
     expect(shouldShowNextGenerating({ viewingLatest: false, latestStatus: 'scored' })).toBe(false);
     expect(shouldShowNextGenerating({ viewingLatest: true, latestStatus: 'pending' })).toBe(false);
     expect(shouldShowNextGenerating({ viewingLatest: true, latestStatus: undefined })).toBe(false);
+    expect(shouldShowNextGenerating({ viewingLatest: true, latestStatus: 'scored', guiding: true })).toBe(false);
   });
 
   it('shows refresh generating only on the card being refreshed', () => {

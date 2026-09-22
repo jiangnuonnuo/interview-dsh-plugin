@@ -9,6 +9,7 @@ import {
   parseCoachBriefOutput,
 } from '../src/services/coach-brief.js';
 import { stubCoach } from './coach-stub.js';
+import { chainBrief } from './chain-json.js';
 
 const topic = 'MySQL 索引与优化';
 const difficulty = 'mid' as const;
@@ -34,6 +35,8 @@ describe('assembleCoachBriefPrompt', () => {
     expect(user).not.toContain('面试官第一问：');
     expect(system).toMatch(/当前待答问/);
     expect(system).toMatch(/忽略同一段里对上一问的点评/);
+    expect(system).toContain('考察意图');
+    expect(system).not.toBe('开始本场八股专项模拟面试。');
   });
 
   it('puts only the pending question in the user message when the turn mixes lecture and a question', () => {
@@ -96,7 +99,7 @@ describe('briefCoachSession', () => {
       expect(system).toContain('面板教练');
       expect(user).toContain(questionText);
       expect(installPersona).not.toHaveBeenCalled();
-      return '{"questionBrief":"聚簇 vs 二级索引","keyPoints":["回表"]}';
+      return chainBrief({ questionBrief: '聚簇 vs 二级索引', keyPoints: ['回表'] });
     });
 
     const result = await briefCoachSession(
@@ -127,7 +130,7 @@ describe('briefCoachSession', () => {
       stubCoach({
         readLatestQuestion: async () => ({ ok: true, text: questionText }),
         readLatestHuman: async () => ({ ok: true, text: '开始本场八股专项模拟面试。' }),
-        complete: async () => '{"questionBrief":"聚簇 vs 二级索引","keyPoints":["回表"]}',
+        complete: async () => chainBrief({ questionBrief: '聚簇 vs 二级索引', keyPoints: ['回表'] }),
       }),
       { sessionId: 'session-exam', topic, difficulty },
       examSessions,
@@ -164,7 +167,7 @@ describe('briefCoachSession', () => {
     const first = await briefCoachSession(
       stubCoach({
         readLatestQuestion: async () => ({ ok: true, text: questionText }),
-        complete: async () => '{"questionBrief":"聚簇 vs 二级索引","keyPoints":["回表"]}',
+        complete: async () => chainBrief({ questionBrief: '聚簇 vs 二级索引', keyPoints: ['回表'] }),
       }),
       { sessionId: 'session-exam', topic, difficulty },
       examSessions,
@@ -187,7 +190,7 @@ describe('briefCoachSession', () => {
     const second = await briefCoachSession(
       stubCoach({
         readLatestQuestion: async () => ({ ok: true, text: 'Redis 为什么单线程还快？' }),
-        complete: async () => '{"questionBrief":"单线程","keyPoints":["无锁"]}',
+        complete: async () => chainBrief({ questionBrief: '单线程', keyPoints: ['无锁'] }),
       }),
       { sessionId: 'session-exam', topic: 'Redis 并发与缓存', difficulty },
       examSessions,
@@ -204,5 +207,69 @@ describe('briefCoachSession', () => {
     expect(files.has(`/workspace/${second.deck.archiveDir}/cards/Q1.md`)).toBe(true);
     expect(files.get(`/workspace/${firstDir}/cards/Q1.md`)).toContain('聚簇');
     expect(files.get(`/workspace/${second.deck.archiveDir}/cards/Q1.md`)).toContain('单线程');
+  });
+
+  it('retries a missing chain once and mounts a legal fallback instead of dropping the section', async () => {
+    const install = jest.fn(() => ({ ok: true }));
+    const clear = jest.fn();
+    let calls = 0;
+    const result = await briefCoachSession(
+      stubCoach({
+        readLatestQuestion: async () => ({ ok: true, text: questionText }),
+        complete: async (system) => {
+          calls += 1;
+          if (calls === 1) {
+            return '{"questionBrief":"聚簇 vs 二级索引","keyPoints":["回表"]}';
+          }
+          expect(system).toContain('知识链不合法');
+          return '{"questionBrief":"聚簇 vs 二级索引","keyPoints":["回表"],"layer":"原理"}';
+        },
+      }),
+      { sessionId: 'session-exam', topic, difficulty },
+      undefined,
+      undefined,
+      {
+        memory: {
+          remember: jest.fn(),
+          recall: jest.fn(),
+          forget: jest.fn(),
+        },
+        port: { install, clear },
+      },
+    );
+    expect(calls).toBe(2);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.deck.cards).toHaveLength(1);
+      expect(result.deck.cards[0]?.questionBrief).toBe('聚簇 vs 二级索引');
+      expect(result.deck.cards[0]?.layer).toBe('why');
+      expect(result.deck.cards[0]?.intent).toBe('回表');
+    }
+    expect(install).toHaveBeenCalledTimes(1);
+    expect(String(install.mock.calls[0]?.[1])).toContain('留在这道题上引导');
+    expect(clear).not.toHaveBeenCalled();
+  });
+
+  it('keeps the repaired chain when the retry already returns a legal one', async () => {
+    let calls = 0;
+    const result = await briefCoachSession(
+      stubCoach({
+        readLatestQuestion: async () => ({ ok: true, text: questionText }),
+        complete: async () => {
+          calls += 1;
+          if (calls === 1) {
+            return '{"questionBrief":"聚簇 vs 二级索引","keyPoints":["回表"]}';
+          }
+          return chainBrief({ questionBrief: '聚簇 vs 二级索引', keyPoints: ['回表'], intent: '说出回表代价' });
+        },
+      }),
+      { sessionId: 'session-exam', topic, difficulty },
+    );
+    expect(calls).toBe(2);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.deck.cards[0]?.intent).toBe('说出回表代价');
+      expect(result.deck.cards[0]?.layer).toBe('why');
+    }
   });
 });

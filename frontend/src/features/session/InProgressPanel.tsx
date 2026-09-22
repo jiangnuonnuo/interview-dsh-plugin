@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { DIFFICULTY_LABELS, findCard, type InterviewDeck, type QuestionCard } from 'interview-dsh-shared';
+import {
+  DIFFICULTY_LABELS,
+  EXAM_LAYER_LABELS,
+  answerTurnLabel,
+  answerTurnsOf,
+  coverageGuides,
+  findCard,
+  type InterviewDeck,
+  type QuestionCard,
+} from 'interview-dsh-shared';
 import {
   accumulateWheelSwipe,
   asElement,
@@ -11,7 +20,7 @@ import {
   shouldShowRefreshGenerating,
   swipeDirection,
   SWIPE_LOCK_PX,
-  WHEEL_SWIPE_COOLDOWN_MS,
+  WHEEL_GESTURE_IDLE_MS,
 } from './card-view';
 import styles from './InProgressPanel.module.css';
 
@@ -188,8 +197,9 @@ export const InProgressPanel = ({
   const detachSwipe = useRef<(() => void) | null>(null);
   const detachWheel = useRef<(() => void) | null>(null);
   const justSwiped = useRef(false);
-  const wheelAt = useRef(0);
   const wheelAcc = useRef(0);
+  const wheelLocked = useRef(false);
+  const wheelIdle = useRef<ReturnType<typeof setTimeout> | null>(null);
   const indexRef = useRef(0);
   const goToIndexRef = useRef<(nextIndex: number) => void>(() => undefined);
 
@@ -215,34 +225,46 @@ export const InProgressPanel = ({
     if (node === null) {
       return;
     }
+    const releaseWheelGesture = () => {
+      if (wheelIdle.current !== null) {
+        clearTimeout(wheelIdle.current);
+      }
+      wheelIdle.current = setTimeout(() => {
+        wheelLocked.current = false;
+        wheelAcc.current = 0;
+        wheelIdle.current = null;
+      }, WHEEL_GESTURE_IDLE_MS);
+    };
     const onWheel = (event: WheelEvent) => {
       if (event.ctrlKey) {
         return;
       }
       const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY);
-      const result = accumulateWheelSwipe(wheelAcc.current, event.deltaX, event.deltaY);
-      wheelAcc.current = result.acc;
       if (horizontal) {
         event.preventDefault();
       }
+      releaseWheelGesture();
+      if (wheelLocked.current) {
+        return;
+      }
+      const result = accumulateWheelSwipe(wheelAcc.current, event.deltaX, event.deltaY);
+      wheelAcc.current = result.acc;
       if (result.direction === null) {
         return;
       }
-      const now = Date.now();
-      if (now - wheelAt.current < WHEEL_SWIPE_COOLDOWN_MS) {
-        return;
-      }
-      wheelAt.current = now;
+      wheelLocked.current = true;
+      wheelAcc.current = 0;
       justSwiped.current = true;
-      if (result.direction === 'next') {
-        goToIndexRef.current(indexRef.current + 1);
-      } else {
-        goToIndexRef.current(indexRef.current - 1);
-      }
+      const step = result.direction === 'next' ? 1 : -1;
+      goToIndexRef.current(indexRef.current + step);
     };
     node.addEventListener('wheel', onWheel, { passive: false, capture: true });
     detachWheel.current = () => {
       node.removeEventListener('wheel', onWheel, { capture: true } as EventListenerOptions);
+      if (wheelIdle.current !== null) {
+        clearTimeout(wheelIdle.current);
+        wheelIdle.current = null;
+      }
     };
   }, []);
 
@@ -271,6 +293,7 @@ export const InProgressPanel = ({
   const showNextGenerating = shouldShowNextGenerating({
     viewingLatest,
     latestStatus: latest?.status,
+    guiding: latest !== undefined && coverageGuides(latest.coverage) && (latest.guideCount ?? 0) < 2,
   });
   const showRefreshGenerating = shouldShowRefreshGenerating({
     viewingTarget: card.status === 'pending' && card.id === deck.currentCardId,
@@ -548,6 +571,14 @@ export const InProgressPanel = ({
             <h3 className={styles.block}>本题题干</h3>
             <p className={styles.brief}>{displayCardText(card.questionText)}</p>
           </section>
+          {card.layer !== undefined && card.intent !== undefined && card.intent.length > 0 ? (
+            <section className={styles.detailBlock} data-testid="card-exam-intent">
+              <h3 className={styles.block}>考察</h3>
+              <p className={styles.brief}>
+                {EXAM_LAYER_LABELS[card.layer]} · {card.intent}
+              </p>
+            </section>
+          ) : null}
           {showRefreshGenerating ? (
             <GeneratingSlot refreshing />
           ) : (
@@ -562,9 +593,22 @@ export const InProgressPanel = ({
           )}
           <div key={card.id} className={styles.folds}>
             <FoldBlock title="作答" icon={<IconEdit />} blocked={justSwiped}>
-              <p className={styles.brief} data-testid="card-answer">
-                {card.answer ?? '待作答'}
-              </p>
+              {answerTurnsOf(card).length === 0 ? (
+                <p className={styles.brief} data-testid="card-answer">
+                  待作答
+                </p>
+              ) : (
+                answerTurnsOf(card).map((turn, turnIndex) => (
+                  <div key={`${card.id}-turn-${turnIndex}`} className={styles.turn}>
+                    <p className={styles.turnLabel} data-testid="answer-turn-label">
+                      {answerTurnLabel(turnIndex)}
+                    </p>
+                    <p className={styles.brief} data-testid="card-answer">
+                      {turn}
+                    </p>
+                  </div>
+                ))
+              )}
             </FoldBlock>
             <FoldBlock title="对照" icon={<IconDoc />} blocked={justSwiped}>
               {card.comparison === null ? (

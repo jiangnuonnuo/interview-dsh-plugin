@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { BAGUA_SCORE_DIMENSIONS, createInterviewDeck, createPendingCard } from 'interview-dsh-shared';
+import { WHEEL_GESTURE_IDLE_MS } from './card-view';
 import { InProgressPanel } from './InProgressPanel';
 
 const pending = createPendingCard({
@@ -51,6 +52,21 @@ const twoCardDeck = createInterviewDeck({
   difficulty: 'mid',
   cards: [scored, q2],
   currentCardId: 'Q2',
+});
+
+const q3 = createPendingCard({
+  id: 'Q3',
+  questionText: '覆盖索引是什么？',
+  questionBrief: '覆盖索引',
+  keyPoints: ['无需回表'],
+});
+
+const threeCardDeck = createInterviewDeck({
+  sessionId: 'session-exam',
+  topic: 'MySQL 索引与优化',
+  difficulty: 'mid',
+  cards: [scored, q2, q3],
+  currentCardId: 'Q3',
 });
 
 const q2Scored = {
@@ -185,6 +201,49 @@ describe('InProgressPanel', () => {
     expect(scores.textContent).toMatch(/基础扎实度/);
     expectNoChatSurface();
     expect(screen.queryByText(/本轮手册/)).toBeNull();
+  });
+
+  it('lists both guided turns and hides the next-card slot and coverage names', () => {
+    const guidedDeck = createInterviewDeck({
+      sessionId: 'session-exam',
+      topic: 'MySQL 索引与优化',
+      difficulty: 'mid',
+      cards: [
+        {
+          ...scored,
+          answer: '不会。\n\n按页读。',
+          answerTurns: ['不会。', '按页读。'],
+          guideCount: 1,
+          coverage: 'miss' as const,
+          comparison: { covered: ['页'], missed: ['扇出'], comment: '重算后的对照' },
+        },
+      ],
+      currentCardId: 'Q1',
+    });
+    render(<InProgressPanel deck={guidedDeck} />);
+    expect(screen.queryByTestId('generating-next')).toBeNull();
+    expect(screen.getAllByTestId('card-id')).toHaveLength(1);
+    openDetail();
+    expand('作答');
+    expect(screen.getAllByTestId('answer-turn-label').map((node) => node.textContent)).toEqual(['a1', 'a2']);
+    expect(screen.getAllByTestId('card-answer').map((node) => node.textContent)).toEqual(['不会。', '按页读。']);
+    expand('对照');
+    expect(screen.getByTestId('card-comparison').textContent).toMatch(/重算后的对照/);
+    const text = document.body.textContent ?? '';
+    for (const token of [
+      'miss',
+      'wide_gap',
+      'deepen',
+      'reask',
+      'next',
+      '一点没答上',
+      '缺口大',
+      '追深',
+      '换大方面',
+      '下一正式问',
+    ]) {
+      expect(text).not.toContain(token);
+    }
   });
 
   it('keeps pending detail folds as empty placeholders without frontend scores', () => {
@@ -362,6 +421,26 @@ describe('InProgressPanel', () => {
     expect(screen.getByTestId('card-id').textContent).toBe('Q2');
   });
 
+  it('moves one card for a whole trackpad flick and the next flick after it goes quiet', () => {
+    jest.useFakeTimers();
+    try {
+      render(<InProgressPanel deck={threeCardDeck} />);
+      fireEvent.click(screen.getByTestId('prev-card'));
+      fireEvent.click(screen.getByTestId('prev-card'));
+      expect(screen.getByTestId('card-id').textContent).toBe('Q1');
+      const stage = screen.getByTestId('card-stage');
+      fireEvent.wheel(stage, { deltaX: 180, deltaY: 0 });
+      fireEvent.wheel(stage, { deltaX: 240, deltaY: 0 });
+      fireEvent.wheel(stage, { deltaX: 320, deltaY: 0 });
+      expect(screen.getByTestId('card-id').textContent).toBe('Q2');
+      jest.advanceTimersByTime(WHEEL_GESTURE_IDLE_MS);
+      fireEvent.wheel(stage, { deltaX: 80, deltaY: 0 });
+      expect(screen.getByTestId('card-id').textContent).toBe('Q3');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('swipes from 查看完整内容 without opening detail', () => {
     render(<InProgressPanel deck={twoCardDeck} />);
     fireEvent.click(screen.getByTestId('prev-card'));
@@ -396,5 +475,34 @@ describe('InProgressPanel', () => {
     expect(screen.getByTestId('card-detail')).toBeDefined();
     expect(screen.getByTestId('card-id').textContent).toBe('Q2');
     expect(screen.queryByTestId('card-answer')).toBeNull();
+  });
+
+  it('shows the exam layer and intent without the follow-up menu', () => {
+    const withIntent = createPendingCard({
+      id: 'Q1',
+      questionText: '为什么用 B+ 树？',
+      questionBrief: 'B+ 树与磁盘',
+      keyPoints: ['按页读取'],
+      layer: 'why',
+      intent: '说出扇出和页',
+    });
+    render(
+      <InProgressPanel
+        deck={createInterviewDeck({
+          sessionId: 'session-exam',
+          topic: 'MySQL',
+          difficulty: 'mid',
+          cards: [withIntent],
+          currentCardId: 'Q1',
+        })}
+      />,
+    );
+    openDetail();
+    const intent = screen.getByTestId('card-exam-intent');
+    expect(intent.textContent).toContain('原理');
+    expect(intent.textContent).toContain('说出扇出和页');
+    expect(screen.getByTestId('card-detail').textContent).not.toContain('答到了');
+    expect(screen.getByTestId('card-detail').textContent).not.toContain('有缺口');
+    expect(screen.getByTestId('card-detail').textContent).not.toContain('没答上');
   });
 });

@@ -430,6 +430,22 @@
   color: #3d4663;
 }
 
+.turn {
+  margin-top: 10px;
+}
+
+.turn:first-child {
+  margin-top: 0;
+}
+
+.turnLabel {
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  color: #3d6ae8;
+}
+
 .points {
   margin: 0;
   padding-left: 18px;

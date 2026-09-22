@@ -15,10 +15,23 @@ describe('assembleInterviewerPersona', () => {
     expect(text).toContain('八股专项');
     expect(text).toContain('中级');
     expect(text).toMatch(/每次只问一个/);
-    expect(text).toContain('是什么');
-    expect(text).toContain('为什么');
+    expect(text).toContain('第一问只问原理或场景');
+    expect(text).not.toContain('按梯度推进');
+    expect(text).toContain('interview:chain');
     expect(text).toMatch(/纠正上一问或补充讲解时只短说/);
     expect(text).toContain('【本题】');
+  });
+
+  it('starts juniors on definitions and keeps the move menu out of the persona', () => {
+    const junior = assembleInterviewerPersona({
+      topic: 'MySQL 索引与优化',
+      difficulty: 'junior',
+    });
+    expect(junior).toContain('第一问只问定义');
+    expect(junior).not.toContain('按梯度推进');
+    expect(junior).not.toContain('答到了');
+    expect(junior).not.toContain('有缺口');
+    expect(junior).not.toContain('没答上');
   });
 
   it('does not include coach scoring or standard-answer instructions', () => {

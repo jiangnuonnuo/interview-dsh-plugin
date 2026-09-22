@@ -44,6 +44,8 @@ const sessionErrorSchema = z.enum([
   'follow_up_failed',
   'persist_unavailable',
   'closing_failed',
+  'chain_unavailable',
+  'coverage_unavailable',
 ]);
 
 const attachResultSchema = z.union([
@@ -86,6 +88,11 @@ const cardSchema = z.object({
   ),
   status: z.enum(['pending', 'scored']),
   seedUserText: z.string(),
+  answerTurns: z.array(z.string()).optional(),
+  guideCount: z.number().int().nonnegative().optional(),
+  coverage: z.enum(['miss', 'wide_gap', 'deepen', 'reask', 'next']).nullable().optional(),
+  layer: z.enum(['define', 'why', 'scene', 'boundary']).optional(),
+  intent: z.string().optional(),
 });
 
 const deckSchema = z.object({

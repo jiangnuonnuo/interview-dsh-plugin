@@ -3,6 +3,8 @@ import { DIFFICULTY_LABELS, type Difficulty, type EntryErrorCode } from './inter
 export type InterviewSessionErrorCode =
   | 'inject_unavailable'
   | 'coach_unavailable'
+  | 'chain_unavailable'
+  | 'coverage_unavailable'
   | 'first_question_failed'
   | 'follow_up_failed'
   | 'persist_unavailable'
@@ -11,14 +13,15 @@ export type InterviewSessionErrorCode =
 export const INTERVIEW_SESSION_ERROR_MESSAGES: Record<InterviewSessionErrorCode, string> = {
   inject_unavailable: '无法在新对话上挂载面试官人设：当前 Host 没有可寻址的 Agent。',
   coach_unavailable: '无法生成本题要点：当前 Host 没有可用的同模型补全。',
+  chain_unavailable: '本题知识链没有挂上，追问退回当前人设。卡片要点仍保留。',
+  coverage_unavailable: '对照没有给出有效结果，作答留在本题，没有新开卡片。',
   first_question_failed: '面试官开口失败。',
   follow_up_failed: '无法看守下一问：本场记录不存在，或当前 Host 读不到最新题干。',
   persist_unavailable: '无法写入工作区练习记录：当前没有可用的工作区目录或文件系统。',
   closing_failed: '无法发送本轮收尾。问答与总结仍会尝试写入。',
 };
 
-export const INTERVIEW_OPENING_PROMPT =
-  '开始本场八股专项模拟面试。请按人设先说明主题与难度，然后只问第一个问题。';
+export const INTERVIEW_OPENING_PROMPT = '开始本场八股专项模拟面试。';
 
 export const INTERVIEW_ROUND_END_TRIGGER = '结束面试';
 
@@ -29,7 +32,7 @@ export const INTERVIEW_ROUND_CLOSING_PROMPT =
   `本轮八股专项模拟面试到此结束。请用面试官口吻作收尾，不要再提出待答问题，不要念对照、五维分数或本轮建议。你的回复最后一句必须原文是：${INTERVIEW_ROUND_CLOSING_LINE}`;
 
 export const assembleNextRoundOpeningPrompt = (topic: string, difficulty: Difficulty): string =>
-  `上一轮八股专项模拟面试已经结束，不要续问上一轮，也不要把上一轮的收尾句当作本题。现在开始新一轮：主题「${topic}」，难度「${DIFFICULTY_LABELS[difficulty]}」。请按人设先说明本轮主题与难度，然后只问本轮第一个问题。`;
+  `上一轮已经结束。开始新一轮：主题「${topic}」，难度「${DIFFICULTY_LABELS[difficulty]}」。`;
 
 export const isRoundClosingText = (text: string): boolean => {
   const trimmed = text.trim();
@@ -63,6 +66,30 @@ export type CardStatus = 'pending' | 'scored';
 
 export type CardRelation = 'followup' | 'next_topic';
 
+export const EXAM_LAYERS = ['define', 'why', 'scene', 'boundary'] as const;
+
+export type ExamLayer = (typeof EXAM_LAYERS)[number];
+
+export const EXAM_LAYER_LABELS: Record<ExamLayer, string> = {
+  define: '定义',
+  why: '原理',
+  scene: '场景',
+  boundary: '边界',
+};
+
+export const isExamLayer = (value: unknown): value is ExamLayer =>
+  typeof value === 'string' && (EXAM_LAYERS as readonly string[]).includes(value);
+
+export const ANSWER_COVERAGES = ['miss', 'wide_gap', 'deepen', 'reask', 'next'] as const;
+
+export type AnswerCoverage = (typeof ANSWER_COVERAGES)[number];
+
+export const isAnswerCoverage = (value: unknown): value is AnswerCoverage =>
+  typeof value === 'string' && (ANSWER_COVERAGES as readonly string[]).includes(value);
+
+export const coverageGuides = (coverage: AnswerCoverage | null | undefined): boolean =>
+  coverage === 'miss' || coverage === 'wide_gap';
+
 export interface CardScore {
   readonly dimension: BaguaScoreDimension;
   readonly score: number | null;
@@ -88,6 +115,11 @@ export interface QuestionCard {
   readonly scores: readonly CardScore[];
   readonly status: CardStatus;
   readonly seedUserText: string;
+  readonly answerTurns?: readonly string[];
+  readonly guideCount?: number;
+  readonly coverage?: AnswerCoverage | null;
+  readonly layer?: ExamLayer;
+  readonly intent?: string;
 }
 
 export type InterviewPhase = 'in_progress';
@@ -108,6 +140,8 @@ export const createPendingCard = (input: {
   readonly questionBrief: string;
   readonly keyPoints: readonly string[];
   readonly seedUserText?: string;
+  readonly layer?: ExamLayer;
+  readonly intent?: string;
 }): QuestionCard => ({
   id: input.id,
   questionText: input.questionText,
@@ -118,7 +152,27 @@ export const createPendingCard = (input: {
   scores: emptyBaguaScores(),
   status: 'pending',
   seedUserText: input.seedUserText ?? '',
+  answerTurns: [],
+  guideCount: 0,
+  ...(input.layer !== undefined ? { layer: input.layer } : {}),
+  ...(input.intent !== undefined ? { intent: input.intent } : {}),
 });
+
+export const answerTurnsOf = (
+  card: Pick<QuestionCard, 'answer'> & { readonly answerTurns?: readonly string[] },
+): readonly string[] => {
+  if (card.answerTurns !== undefined && card.answerTurns.length > 0) {
+    return card.answerTurns;
+  }
+  if (card.answer !== null && card.answer.length > 0) {
+    return [card.answer];
+  }
+  return [];
+};
+
+export const joinAnswerTurns = (turns: readonly string[]): string => turns.join('\n\n');
+
+export const answerTurnLabel = (index: number): string => `a${index + 1}`;
 
 export const createInterviewDeck = (input: {
   readonly sessionId: string;

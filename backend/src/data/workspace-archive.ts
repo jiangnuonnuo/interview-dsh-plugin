@@ -1,5 +1,8 @@
 import {
+  EXAM_LAYER_LABELS,
   INTERVIEW_SESSION_ERROR_MESSAGES,
+  answerTurnLabel,
+  answerTurnsOf,
   type ExamRoundIndex,
   type InterviewDeck,
   type LoadDeckRequest,
@@ -102,9 +105,18 @@ export const renderCardMarkdown = (deck: InterviewDeck, cardId: string): string 
     '## 开卷',
     card.questionBrief,
     ...card.keyPoints.map((point) => `- ${point}`),
+    ...(card.layer !== undefined && card.intent !== undefined
+      ? ['', '## 考察', EXAM_LAYER_LABELS[card.layer], card.intent]
+      : []),
     '',
     '## 作答',
-    card.answer ?? '待作答',
+    ...(() => {
+      const turns = answerTurnsOf(card);
+      if (turns.length === 0) {
+        return ['待作答'];
+      }
+      return turns.flatMap((turn, index) => [answerTurnLabel(index), turn]);
+    })(),
     '',
     '## 对照',
     card.comparison === null

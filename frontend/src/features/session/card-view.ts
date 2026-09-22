@@ -4,7 +4,8 @@ export const CARD_TITLE_MAX = 16;
 export const SWIPE_THRESHOLD_PX = 48;
 export const SWIPE_LOCK_PX = 12;
 export const WHEEL_SWIPE_THRESHOLD = 40;
-export const WHEEL_SWIPE_COOLDOWN_MS = 420;
+/** One trackpad flick keeps sending wheel events until it goes quiet. */
+export const WHEEL_GESTURE_IDLE_MS = 280;
 
 export const displayCardText = (text: string): string =>
   text.replace(/\*\*/g, '').replace(/^#+\s+/gm, '').trim();
@@ -21,10 +22,12 @@ export const cardShortTitle = (questionBrief: string): string => {
 export const shouldShowNextGenerating = ({
   viewingLatest,
   latestStatus,
+  guiding = false,
 }: {
   viewingLatest: boolean;
   latestStatus: CardStatus | undefined;
-}): boolean => viewingLatest && latestStatus === 'scored';
+  guiding?: boolean;
+}): boolean => viewingLatest && latestStatus === 'scored' && !guiding;
 
 export const shouldShowRefreshGenerating = ({
   viewingTarget,

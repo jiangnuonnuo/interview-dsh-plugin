@@ -439,7 +439,7 @@ describe('createHostCoachRuntime', () => {
         type: 'user/message',
         data: {
           role: 'user',
-          content: [{ type: 'text', text: '开始本场八股专项模拟面试。请按人设先说明主题与难度，然后只问第一个问题。' }],
+          content: [{ type: 'text', text: '开始本场八股专项模拟面试。' }],
           source: { kind: 'user' },
         },
       },
@@ -465,7 +465,7 @@ describe('createHostCoachRuntime', () => {
     });
     await expect(runtime.readLatestHuman('session-exam')).resolves.toEqual({
       ok: true,
-      text: '开始本场八股专项模拟面试。请按人设先说明主题与难度，然后只问第一个问题。',
+      text: '开始本场八股专项模拟面试。',
     });
     events.push({
       type: 'user/message',

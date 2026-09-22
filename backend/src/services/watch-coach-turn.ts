@@ -1,7 +1,12 @@
 import {
   INTERVIEW_SESSION_ERROR_MESSAGES,
+  answerTurnsOf,
+  coverageGuides,
   createPendingCard,
   isRoundClosingText,
+  joinAnswerTurns,
+  type AnswerCoverage,
+  type CardRelation,
   type InterviewDeck,
   type QuestionCard,
   type WatchCoachTurnRequest,
@@ -14,8 +19,10 @@ import {
   persistDeck,
   assembleCoachBriefPrompt,
   parseCoachBriefOutput,
+  type ChainHooks,
   type CoachRuntime,
 } from './coach-brief.js';
+import { clipChain, fallbackChain, type ChainMove } from './knowledge-chain.js';
 import { applyScoreToCard, assembleCoachScorePrompt, parseCoachScoreOutput } from './coach-score.js';
 
 export const WATCH_COACH_TURN_TIMEOUT_MS = 20_000;
@@ -29,6 +36,27 @@ const followUpFailed = (deck?: InterviewDeck): Extract<WatchCoachTurnResponse, {
   ok: false,
   code: 'follow_up_failed',
   message: INTERVIEW_SESSION_ERROR_MESSAGES.follow_up_failed,
+  ...(deck ? { deck } : {}),
+});
+
+const coverageUnavailable = (deck?: InterviewDeck): Extract<WatchCoachTurnResponse, { ok: false }> => ({
+  ok: false,
+  code: 'coverage_unavailable',
+  message: INTERVIEW_SESSION_ERROR_MESSAGES.coverage_unavailable,
+  ...(deck ? { deck } : {}),
+});
+
+const chainUnavailable = (deck?: InterviewDeck): Extract<WatchCoachTurnResponse, { ok: false }> => ({
+  ok: false,
+  code: 'chain_unavailable',
+  message: INTERVIEW_SESSION_ERROR_MESSAGES.chain_unavailable,
+  ...(deck ? { deck } : {}),
+});
+
+const injectUnavailable = (deck?: InterviewDeck): Extract<WatchCoachTurnResponse, { ok: false }> => ({
+  ok: false,
+  code: 'inject_unavailable',
+  message: INTERVIEW_SESSION_ERROR_MESSAGES.inject_unavailable,
   ...(deck ? { deck } : {}),
 });
 
@@ -46,6 +74,35 @@ const pendingToScore = (deck: InterviewDeck, humanText: string): QuestionCard | 
   [...deck.cards]
     .reverse()
     .find((card) => card.status === 'pending' && humanText.length > 0 && humanText !== card.seedUserText);
+
+const guideToScore = (deck: InterviewDeck, humanText: string): QuestionCard | undefined =>
+  [...deck.cards].reverse().find((card) => {
+    if (card.status !== 'scored' || !coverageGuides(card.coverage) || (card.guideCount ?? 0) >= 2) {
+      return false;
+    }
+    return humanText.length > 0 && humanText !== card.seedUserText && !answerTurnsOf(card).includes(humanText);
+  });
+
+const cardToScore = (deck: InterviewDeck, humanText: string): QuestionCard | undefined =>
+  pendingToScore(deck, humanText) ?? guideToScore(deck, humanText);
+
+const stillGuiding = (deck: InterviewDeck): boolean => {
+  const latest = deck.cards[deck.cards.length - 1];
+  return latest !== undefined && coverageGuides(latest.coverage) && (latest.guideCount ?? 0) < 2;
+};
+
+const relationForOpenedCard = (
+  coverage: AnswerCoverage | null | undefined,
+  matchedMove: ChainMove | undefined,
+): CardRelation => {
+  if (coverage === 'next') {
+    return 'next_topic';
+  }
+  if (coverage === 'deepen' || coverage === 'reask') {
+    return 'followup';
+  }
+  return matchedMove === 'switch' ? 'next_topic' : 'followup';
+};
 
 const replaceCard = (deck: InterviewDeck, next: QuestionCard, currentCardId = deck.currentCardId): InterviewDeck => ({
   ...deck,
@@ -65,6 +122,7 @@ export const watchCoachTurnSession = async (
   request: WatchCoachTurnRequest,
   clock: WatchCoachTurnClock = {},
   archive?: WorkspaceArchive,
+  hooks?: ChainHooks,
 ): Promise<WatchCoachTurnResponse> => {
   const record = examSessions.load(request.sessionId);
   if (record === undefined) {
@@ -80,6 +138,7 @@ export const watchCoachTurnSession = async (
   let briefError: Extract<WatchCoachTurnResponse, { ok: false }> | undefined;
   let scoreError: Extract<WatchCoachTurnResponse, { ok: false }> | undefined;
   let changed = false;
+  let sealedGuide = false;
 
   const persistAndReturn = async (): Promise<
     | { readonly ok: true; readonly status: 'updated'; readonly deck: InterviewDeck }
@@ -108,17 +167,22 @@ export const watchCoachTurnSession = async (
     if (isRoundClosingText(human.text) || human.text === record.closingSeed) {
       return;
     }
-    const pending = pendingToScore(deck, human.text);
+    const pending = cardToScore(deck, human.text);
     if (pending === undefined) {
       return;
     }
+    const turns = answerTurnsOf(pending).includes(human.text)
+      ? answerTurnsOf(pending)
+      : [...answerTurnsOf(pending), human.text];
     const { system, user } = assembleCoachScorePrompt({
       topic: record.topic,
       difficulty: record.difficulty,
       questionText: pending.questionText,
       questionBrief: pending.questionBrief,
       keyPoints: pending.keyPoints,
-      answer: human.text,
+      answer: joinAnswerTurns(turns),
+      ...(pending.layer !== undefined ? { layer: pending.layer } : {}),
+      ...(pending.intent !== undefined ? { intent: pending.intent } : {}),
     });
     const raw = await runtime.complete(system, user);
     if (raw === null) {
@@ -130,18 +194,29 @@ export const watchCoachTurnSession = async (
       scoreError = coachUnavailable(deck);
       return;
     }
+    const beforeGuide = pending.guideCount ?? 0;
     deck = replaceCard(deck, applyScoreToCard(pending, parsed, human.text), pending.id);
     changed = true;
+    if (parsed.coverage === null) {
+      scoreError = coverageUnavailable(deck);
+      return;
+    }
+    if (coverageGuides(parsed.coverage) && beforeGuide < 2 && beforeGuide + 1 >= 2) {
+      sealedGuide = true;
+    }
   };
 
   const briefQuestion = async (questionText: string): Promise<ReturnType<typeof parseCoachBriefOutput> | null> => {
     let pendingText = questionText;
     let parsed: ReturnType<typeof parseCoachBriefOutput> = null;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    let repairChain = false;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
       const { system, user } = assembleCoachBriefPrompt({
         topic: record.topic,
         difficulty: record.difficulty,
         questionText: pendingText,
+        previousChain: hooks?.memory.recall(request.sessionId),
+        repairChain,
       });
       const raw = await runtime.complete(system, user);
       if (raw === null) {
@@ -153,7 +228,12 @@ export const watchCoachTurnSession = async (
         briefError = coachUnavailable(deck);
         return null;
       }
-      if (attempt < 2) {
+      if (parsed.chain === undefined && !repairChain) {
+        repairChain = true;
+        continue;
+      }
+      repairChain = false;
+      if (attempt < 3) {
         const caught = await runtime.awaitNewQuestion(request.sessionId, pendingText, {
           timeoutMs: pollMs,
           pollMs,
@@ -165,8 +245,43 @@ export const watchCoachTurnSession = async (
       }
       break;
     }
+    if (parsed !== null && parsed.chain === undefined) {
+      parsed = {
+        ...parsed,
+        chain: fallbackChain({
+          difficulty: record.difficulty,
+          questionBrief: parsed.questionBrief,
+          keyPoints: parsed.keyPoints,
+        }),
+      };
+    }
     lastQuestionText = pendingText;
     return parsed;
+  };
+
+  const acceptChain = (
+    parsed: NonNullable<ReturnType<typeof parseCoachBriefOutput>>,
+    cardIds: readonly string[],
+  ) => {
+    if (parsed.chain === undefined) {
+      briefError = chainUnavailable(deck);
+      hooks?.memory.forget(request.sessionId);
+      hooks?.port?.clear(request.sessionId);
+      return undefined;
+    }
+    const clipped = clipChain({
+      difficulty: record.difficulty,
+      chain: parsed.chain,
+      cardIds,
+    });
+    hooks?.memory.remember(request.sessionId, clipped);
+    if (hooks?.port !== undefined) {
+      const mounted = hooks.port.install(request.sessionId, clipped.sectionText);
+      if (!mounted.ok) {
+        briefError = injectUnavailable(deck);
+      }
+    }
+    return clipped;
   };
 
   const appendNewCard = async (questionText: string): Promise<boolean> => {
@@ -175,20 +290,20 @@ export const watchCoachTurnSession = async (
       return false;
     }
     const previous = deck.cards[deck.cards.length - 1];
+    const relation = relationForOpenedCard(previous?.coverage, parsed.chain?.matchedMove);
+    const id = assignCardId(deck.cards.map((item) => item.id), {
+      relation,
+      previousId: previous?.id,
+    });
+    const clipped = acceptChain(parsed, [...deck.cards.map((item) => item.id), id]);
     const seed = await runtime.readLatestHuman(request.sessionId);
     const card = createPendingCard({
-      id: assignCardId(
-        deck.cards.map((item) => item.id),
-        {
-          suggestedId: parsed.cardId,
-          relation: parsed.relation,
-          previousId: previous?.id,
-        },
-      ),
+      id,
       questionText: lastQuestionText,
       questionBrief: parsed.questionBrief,
       keyPoints: parsed.keyPoints,
       seedUserText: seed.ok ? seed.text : '',
+      ...(clipped !== undefined ? { layer: clipped.layer, intent: clipped.intent } : {}),
     });
     deck = appendCard(deck, card);
     changed = true;
@@ -196,10 +311,19 @@ export const watchCoachTurnSession = async (
   };
 
   const publishIfWaitingForNextBrief = async () => {
+    if (scoreError !== undefined) {
+      return undefined;
+    }
     const latest = deck.cards[deck.cards.length - 1];
     if (!changed || latest?.status !== 'scored' || lastPending(deck) !== undefined) {
       return undefined;
     }
+    return persistAndReturn();
+  };
+
+  const holdGuideSpeech = async (questionText: string) => {
+    lastQuestionText = questionText;
+    changed = true;
     return persistAndReturn();
   };
 
@@ -208,6 +332,12 @@ export const watchCoachTurnSession = async (
       return { ok: true as const, status: 'unchanged' as const };
     }
     await scorePendingIfAnswered();
+    if (scoreError !== undefined) {
+      return undefined;
+    }
+    if (stillGuiding(deck) || sealedGuide) {
+      return holdGuideSpeech(questionText);
+    }
     const published = await publishIfWaitingForNextBrief();
     if (published !== undefined) {
       return published;
@@ -234,12 +364,17 @@ export const watchCoachTurnSession = async (
     if (pending !== undefined && latest.text === pending.questionText) {
       const parsed = await briefQuestion(latest.text);
       if (parsed !== null) {
+        const clipped = acceptChain(
+          parsed,
+          deck.cards.map((item) => item.id),
+        );
         deck = replaceCard(
           deck,
           {
             ...pending,
             questionBrief: parsed.questionBrief,
             keyPoints: parsed.keyPoints,
+            ...(clipped !== undefined ? { layer: clipped.layer, intent: clipped.intent } : {}),
           },
           pending.id,
         );

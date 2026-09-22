@@ -5,6 +5,7 @@
 import { createInterviewDeck, createPendingCard, INTERVIEW_ROUND_CLOSING_LINE, INTERVIEW_ROUND_END_TRIGGER } from 'interview-dsh-shared';
 import { createExamSessionStore } from '../src/data/exam-session-store.js';
 import { watchCoachTurnSession } from '../src/services/watch-coach-turn.js';
+import { chainBrief } from './chain-json.js';
 import { stubCoach } from './coach-stub.js';
 
 const q1 = createPendingCard({
@@ -67,7 +68,12 @@ describe('watchCoachTurnSession', () => {
       expect(user).toContain('面试官当前问题：');
       expect(user).toContain('二级索引如何回表？');
       expect(user).not.toContain('扮演面试官');
-      return '{"questionBrief":"二级索引回表","keyPoints":["先查二级再回聚簇"],"cardId":"Q2","relation":"next_topic"}';
+      return chainBrief({
+        questionBrief: '二级索引回表',
+        keyPoints: ['先查二级再回聚簇'],
+        cardId: 'Q2',
+        relation: 'next_topic',
+      });
     });
     const examSessions = seedStore();
     const result = await watchCoachTurnSession(
@@ -100,9 +106,9 @@ describe('watchCoachTurnSession', () => {
   it('briefs the newer question if it arrives while the previous brief is running', async () => {
     const complete = jest.fn(async (_system: string, user: string) => {
       if (user.includes('Redisson 看门狗')) {
-        return '{"questionBrief":"Redisson看门狗续期","keyPoints":["客户端续期"]}';
+        return chainBrief({ questionBrief: 'Redisson看门狗续期', keyPoints: ['客户端续期'] });
       }
-      return '{"questionBrief":"WATCH与Lua","keyPoints":["单条命令原子"]}';
+      return chainBrief({ questionBrief: 'WATCH与Lua', keyPoints: ['单条命令原子'] });
     });
     const awaitNewQuestion = jest
       .fn()
@@ -166,7 +172,9 @@ describe('watchCoachTurnSession', () => {
   });
 
   it('force-briefs the current pending card even when the fingerprint is unchanged', async () => {
-    const complete = jest.fn(async () => '{"questionBrief":"强制刷新摘要","keyPoints":["强制刷新要点"]}');
+    const complete = jest.fn(async () =>
+      chainBrief({ questionBrief: '强制刷新摘要', keyPoints: ['强制刷新要点'] }),
+    );
     const awaitNewQuestion = jest.fn(async () => ({ ok: true as const, status: 'unchanged' as const }));
     const runtime = stubCoach({
       readLatestQuestion: async () => ({ ok: true, text: '请说明聚簇索引。' }),

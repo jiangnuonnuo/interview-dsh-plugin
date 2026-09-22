@@ -7,8 +7,11 @@ export const INTERVIEWER_PERSONA_SECTION = 'deployment:persona';
 export const INTERVIEWER_PERSONA_ORDER = 0;
 export const ROUND_CLOSE_SECTION = 'deployment:round-close';
 export const ROUND_CLOSE_ORDER = 1;
+export const INTERVIEW_CHAIN_SECTION = 'interview:chain';
+export const INTERVIEW_CHAIN_ORDER = 2;
 
 const roundCloseDisposers = new Map<string, () => void>();
+const chainDisposers = new Map<string, () => void>();
 
 export interface PersonaHostAgent {
   readonly ctx: {
@@ -92,4 +95,38 @@ export const installRoundClosingSection = (
 export const clearRoundClosingSection = (sessionId: string): void => {
   roundCloseDisposers.get(sessionId)?.();
   roundCloseDisposers.delete(sessionId);
+};
+
+export const clearChainSection = (sessionId: string): void => {
+  chainDisposers.get(sessionId)?.();
+  chainDisposers.delete(sessionId);
+};
+
+export const installChainSection = (
+  ctx: PersonaHostContext,
+  request: { readonly sessionId: string; readonly text: string },
+): AttachInterviewerResponse => {
+  const systemPrompt = asPersonaAgent(ctx.agents?.get(request.sessionId))?.ctx.systemPrompt;
+  if (typeof systemPrompt?.section !== 'function') {
+    return unavailable();
+  }
+
+  chainDisposers.get(request.sessionId)?.();
+  chainDisposers.delete(request.sessionId);
+
+  try {
+    const dispose = systemPrompt.section({
+      name: INTERVIEW_CHAIN_SECTION,
+      order: INTERVIEW_CHAIN_ORDER,
+      text: request.text,
+    });
+    if (typeof dispose === 'function') {
+      chainDisposers.set(request.sessionId, () => {
+        (dispose as () => void)();
+      });
+    }
+  } catch {
+    return unavailable();
+  }
+  return { ok: true };
 };

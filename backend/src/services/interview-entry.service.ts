@@ -28,15 +28,18 @@ import {
 import type { EntryConfigStore } from '../data/entry-config-store.js';
 import { createExamSessionStore, type ExamSessionStore } from '../data/exam-session-store.js';
 import { loadDeckSession, type WorkspaceArchive } from '../data/workspace-archive.js';
-import { briefCoachSession, type CoachRuntime } from './coach-brief.js';
+import { briefCoachSession, type ChainHooks, type CoachRuntime } from './coach-brief.js';
 import { endRoundSession } from './end-round.js';
 import { assembleInterviewerPersona } from './interviewer-persona.js';
+import { createChainMemory } from './knowledge-chain.js';
 import { watchCoachTurnSession } from './watch-coach-turn.js';
 
 export interface InterviewerPersonaInstaller {
   install(sessionId: string, text: string): AttachInterviewerResponse;
   installRoundClose?(sessionId: string, text: string): ArmRoundCloseResponse;
   clearRoundClose?(sessionId: string): void;
+  installChain?(sessionId: string, text: string): AttachInterviewerResponse;
+  clearChain?(sessionId: string): void;
 }
 
 export interface InterviewEntryService {
@@ -87,7 +90,22 @@ export const createInterviewEntryService = (
   coach: CoachRuntime = unavailableCoach,
   examSessions: ExamSessionStore = createExamSessionStore(),
   archive?: WorkspaceArchive,
-): InterviewEntryService => ({
+): InterviewEntryService => {
+  const chainMemory = createChainMemory();
+  const hooks: ChainHooks = {
+    memory: chainMemory,
+    ...(persona.installChain !== undefined && persona.clearChain !== undefined
+      ? {
+          port: {
+            install: (sessionId, text) => persona.installChain?.(sessionId, text) ?? { ok: false },
+            clear: (sessionId) => {
+              persona.clearChain?.(sessionId);
+            },
+          },
+        }
+      : {}),
+  };
+  return {
   acceptEntryConfig(request) {
     if (!isDifficulty(request.difficulty)) {
       return failure('invalid_difficulty');
@@ -138,10 +156,10 @@ export const createInterviewEntryService = (
   },
   briefCoach(request) {
     persona.clearRoundClose?.(request.sessionId);
-    return briefCoachSession(coach, request, examSessions, archive);
+    return briefCoachSession(coach, request, examSessions, archive, hooks);
   },
   watchCoachTurn(request) {
-    return watchCoachTurnSession(coach, examSessions, request, {}, archive);
+    return watchCoachTurnSession(coach, examSessions, request, {}, archive, hooks);
   },
   loadDeck(request) {
     return loadDeckSession(examSessions, request, archive);
@@ -157,6 +175,8 @@ export const createInterviewEntryService = (
         message: INTERVIEW_SESSION_ERROR_MESSAGES.inject_unavailable,
       };
     }
+    persona.clearChain?.(request.sessionId);
+    chainMemory.forget(request.sessionId);
     return persona.installRoundClose(request.sessionId, INTERVIEW_ROUND_CLOSING_PROMPT);
   },
   clearRoundClose(request) {
@@ -181,4 +201,5 @@ export const createInterviewEntryService = (
     }
     return { ok: true as const, status: 'none' as const };
   },
-});
+  };
+};
