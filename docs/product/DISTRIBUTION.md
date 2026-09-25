@@ -27,20 +27,20 @@ Desktop profile：`web`
 
 | 项 | 值 |
 |---|---|
-| 版本 | `1.2.0` |
-| SHA | `25a9986f04d93ce84e0c500c606ec6647eeb590a` |
+| 版本 | `2.0.0` |
+| SHA | `095cd540953d405a9140751e4ceeb1e168160208` |
 | 目录 | 已 listed。目录不会自动改到这一 SHA，安装用上面的命令 |
 
 候选人安装（复制这一条）：
 
 ```bash
-npx dshpub add jiangnuonnuo/interview-dsh-plugin --ref 25a9986f04d93ce84e0c500c606ec6647eeb590a --profile web
+npx dshpub add jiangnuonnuo/interview-dsh-plugin --ref 095cd540953d405a9140751e4ceeb1e168160208 --profile web
 ```
 
 等价：
 
 ```bash
-dsh plugin --profile web add github:jiangnuonnuo/interview-dsh-plugin#25a9986f04d93ce84e0c500c606ec6647eeb590a
+dsh plugin --profile web add github:jiangnuonnuo/interview-dsh-plugin#095cd540953d405a9140751e4ceeb1e168160208
 ```
 
 卸载：
