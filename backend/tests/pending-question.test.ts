@@ -44,4 +44,10 @@ describe('extractPendingQuestion', () => {
     const text = '欢迎，本轮是 MySQL 索引与优化 的高级专项面试。';
     expect(extractPendingQuestion(text)).toBe(text);
   });
+
+  it('does not treat a host route-plan 502 as the next question', () => {
+    const blocked =
+      '502: {"code":502,"failure_class":"retryable","message":"The content you provided or machine outputted is blocked.","type":"route_plan_error"}';
+    expect(extractPendingQuestion(blocked)).toBe('');
+  });
 });

@@ -129,6 +129,14 @@ describe('InProgressPanel', () => {
     expect(screen.queryByLabelText(/文件夹/)).toBeNull();
   });
 
+  it('shows 判断已加速 without naming coverage values', () => {
+    render(<InProgressPanel deck={pendingDeck} jevAccelerated />);
+    expect(screen.getByText('判断已加速')).toBeDefined();
+    expect(screen.queryByText('miss')).toBeNull();
+    expect(screen.queryByText('wide_gap')).toBeNull();
+    expect(screen.queryByText('Jev')).toBeNull();
+  });
+
   it('opens detail from 查看完整内容 even after pointerdown on the CTA', () => {
     render(<InProgressPanel deck={pendingDeck} />);
     const cta = screen.getByTestId('open-card-detail');

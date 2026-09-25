@@ -3,6 +3,7 @@ import {
   ENTRY_ERROR_MESSAGES,
   INTERVIEW_ROUND_CLOSING_PROMPT,
   INTERVIEW_SESSION_ERROR_MESSAGES,
+  JEV_CONFIG_ERROR_MESSAGES,
   findPresetTopic,
   isDifficulty,
   type AcceptEntryConfigRequest,
@@ -20,15 +21,21 @@ import {
   type GetEntryConfigResponse,
   type GetExamRoundStateRequest,
   type GetExamRoundStateResponse,
+  type GetJevConfigRequest,
+  type GetJevConfigResponse,
   type LoadDeckRequest,
   type LoadDeckResponse,
+  type SaveJevConfigRequest,
+  type SaveJevConfigResponse,
   type WatchCoachTurnRequest,
   type WatchCoachTurnResponse,
 } from 'interview-dsh-shared';
 import type { EntryConfigStore } from '../data/entry-config-store.js';
 import { createExamSessionStore, type ExamSessionStore } from '../data/exam-session-store.js';
+import { planJevSave, type JevConfigStore } from '../data/jev-config.js';
 import { loadDeckSession, type WorkspaceArchive } from '../data/workspace-archive.js';
 import { briefCoachSession, type ChainHooks, type CoachRuntime } from './coach-brief.js';
+import type { CoveragePort } from './coverage-port.js';
 import { endRoundSession } from './end-round.js';
 import { assembleInterviewerPersona } from './interviewer-persona.js';
 import { createChainMemory } from './knowledge-chain.js';
@@ -45,6 +52,8 @@ export interface InterviewerPersonaInstaller {
 export interface InterviewEntryService {
   acceptEntryConfig(request: AcceptEntryConfigRequest): AcceptEntryConfigResponse;
   getEntryConfig(): GetEntryConfigResponse;
+  getJevConfig(request?: GetJevConfigRequest): Promise<GetJevConfigResponse>;
+  saveJevConfig(request: SaveJevConfigRequest): Promise<SaveJevConfigResponse>;
   attachInterviewer(request: AttachInterviewerRequest): AttachInterviewerResponse;
   briefCoach(request: BriefCoachRequest): Promise<BriefCoachResponse>;
   watchCoachTurn(request: WatchCoachTurnRequest): Promise<WatchCoachTurnResponse>;
@@ -90,6 +99,11 @@ export const createInterviewEntryService = (
   coach: CoachRuntime = unavailableCoach,
   examSessions: ExamSessionStore = createExamSessionStore(),
   archive?: WorkspaceArchive,
+  extras?: {
+    readonly jevConfig?: JevConfigStore;
+    readonly coverage?: CoveragePort;
+    readonly probeJev?: (apiKey: string) => Promise<boolean>;
+  },
 ): InterviewEntryService => {
   const chainMemory = createChainMemory();
   const hooks: ChainHooks = {
@@ -147,6 +161,40 @@ export const createInterviewEntryService = (
   getEntryConfig() {
     return { config: store.load() };
   },
+  async getJevConfig(request = {}) {
+    if (extras?.jevConfig === undefined) {
+      return { ok: true as const, enabled: false, apiKeySet: false };
+    }
+    return extras.jevConfig.loadPublic(request.sessionId);
+  },
+  async saveJevConfig(request) {
+    if (extras?.jevConfig === undefined) {
+      return {
+        ok: false as const,
+        code: 'persist_unavailable' as const,
+        message: JEV_CONFIG_ERROR_MESSAGES.persist_unavailable,
+      };
+    }
+    const current = await extras.jevConfig.loadSecret(request.sessionId);
+    const planned = planJevSave(current, { enabled: request.enabled, apiKey: request.apiKey });
+    if (!planned.ok) {
+      return planned;
+    }
+    if (planned.next.enabled) {
+      const reachable = extras.probeJev === undefined ? false : await extras.probeJev(planned.next.apiKey);
+      if (!reachable) {
+        return {
+          ok: false as const,
+          code: 'jev_unreachable' as const,
+          message: JEV_CONFIG_ERROR_MESSAGES.jev_unreachable,
+        };
+      }
+    }
+    return extras.jevConfig.save(
+      { enabled: planned.next.enabled, apiKey: planned.next.apiKey },
+      request.sessionId,
+    );
+  },
   attachInterviewer(request) {
     const text = assembleInterviewerPersona({
       topic: request.topic,
@@ -159,7 +207,7 @@ export const createInterviewEntryService = (
     return briefCoachSession(coach, request, examSessions, archive, hooks);
   },
   watchCoachTurn(request) {
-    return watchCoachTurnSession(coach, examSessions, request, {}, archive, hooks);
+    return watchCoachTurnSession(coach, examSessions, request, {}, archive, hooks, extras?.coverage);
   },
   loadDeck(request) {
     return loadDeckSession(examSessions, request, archive);

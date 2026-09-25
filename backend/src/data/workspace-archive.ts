@@ -52,8 +52,14 @@ export const persistUnavailable = (): PersistFailure => ({
 
 const ARCHIVE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
+const RESERVED_ARCHIVE_SESSION_IDS = new Set(['config']);
+
 export const sessionArchiveRoot = (sessionId: string): string | undefined => {
-  if (!ARCHIVE_SESSION_ID.test(sessionId) || sessionId.includes('..')) {
+  if (
+    !ARCHIVE_SESSION_ID.test(sessionId) ||
+    sessionId.includes('..') ||
+    RESERVED_ARCHIVE_SESSION_IDS.has(sessionId)
+  ) {
     return undefined;
   }
   return `.dsh-interview/${sessionId}`;
@@ -138,7 +144,7 @@ export const saveExamRecord = (
   examSessions: ExamSessionStore,
   deck: InterviewDeck,
   lastQuestionText: string,
-  extras?: { ended?: boolean; closingSeed?: string },
+  extras?: { ended?: boolean; closingSeed?: string; jevAccelerated?: boolean },
 ): void => {
   examSessions.save({
     sessionId: deck.sessionId,
@@ -148,6 +154,7 @@ export const saveExamRecord = (
     deck,
     ended: extras?.ended === true,
     ...(extras?.closingSeed !== undefined ? { closingSeed: extras.closingSeed } : {}),
+    ...(extras?.jevAccelerated === true ? { jevAccelerated: true } : {}),
   });
 };
 

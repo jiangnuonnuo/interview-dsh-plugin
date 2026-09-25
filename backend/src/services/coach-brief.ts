@@ -212,6 +212,7 @@ export interface CoachRuntime {
     options?: AwaitNewQuestionOptions,
   ): Promise<AwaitNewQuestionResult>;
   complete(system: string, user: string): Promise<string | null>;
+  whenIdle?(sessionId: string): Promise<void>;
 }
 
 const coachUnavailable = (deck?: InterviewDeck): BriefCoachResponse => ({
@@ -385,5 +386,6 @@ export const briefCoachSession = async (
     currentCardId: card.id,
     archiveDir,
   });
+  await runtime.whenIdle?.(request.sessionId);
   return finishBrief(archive, examSessions, deck, question.text, clipped, hooks);
 };

@@ -227,7 +227,8 @@
   flex: 0 0 22px;
 }
 
-.customInput {
+.customInput,
+.judgeKeyInput {
   width: 100%;
   margin-top: 8px;
   height: 36px;
@@ -236,6 +237,15 @@
   border-radius: 10px;
   font: inherit;
   font-size: 13px;
+  color-scheme: light;
+  background: #fff;
+  color: #1b2433;
+  -webkit-text-fill-color: #1b2433;
+}
+
+.judgeKeyInput::placeholder {
+  color: #8a93a6;
+  -webkit-text-fill-color: #8a93a6;
 }
 
 .settings {
@@ -268,6 +278,73 @@
   border-color: #24324a;
   color: #fff;
   font-weight: 600;
+}
+
+.judge {
+  border: 1px solid var(--entry-line);
+  border-radius: 12px;
+  padding: 8px 12px 10px;
+  background: #fafbfe;
+}
+
+.judge > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.judge > summary::-webkit-details-marker {
+  display: none;
+}
+
+.judgeStamp {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--entry-chip-ink);
+  background: var(--entry-chip);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.judgeToggle,
+.judgeKey {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--entry-ink);
+}
+
+.judgeKey {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.judgeSave {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #c5cdd8;
+  background: #24324a;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.judgeSave:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .cta {

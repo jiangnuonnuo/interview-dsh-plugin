@@ -184,4 +184,30 @@ export const applyScoreToCard = (card: QuestionCard, parsed: ParsedCoachScore, a
   };
 };
 
+export const applyCoverageToCard = (
+  card: QuestionCard,
+  coverage: AnswerCoverage,
+  answer: string,
+): QuestionCard => {
+  const prior = answerTurnsOf(card);
+  const turns = answer.length > 0 && !prior.includes(answer) ? [...prior, answer] : prior;
+  const guideCount = card.guideCount ?? 0;
+  const guiding = coverageGuides(coverage) && guideCount < 2;
+  return {
+    ...card,
+    answer: turns.length > 0 ? joinAnswerTurns(turns) : answer,
+    answerTurns: turns,
+    guideCount: guiding ? guideCount + 1 : guideCount,
+    coverage,
+    status: 'scored',
+  };
+};
+
+export const applyProseToCard = (card: QuestionCard, parsed: ParsedCoachScore): QuestionCard => ({
+  ...card,
+  comparison: parsed.comparison,
+  scores: parsed.scores,
+  status: 'scored',
+});
+
 export const pendingScores = (): readonly CardScore[] => emptyBaguaScores();

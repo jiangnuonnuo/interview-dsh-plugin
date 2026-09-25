@@ -120,6 +120,8 @@ describe('workspace archive', () => {
     expect(archiveDirFor('session/exam')).toBeUndefined();
     expect(archiveDirFor('session\\exam')).toBeUndefined();
     expect(archiveDirFor('session..exam')).toBeUndefined();
+    expect(sessionArchiveRoot('config')).toBeUndefined();
+    expect(archiveDirFor('config', 1, 'MySQL')).toBeUndefined();
   });
 
   it('writes session.json and per-card markdown under round-1', async () => {

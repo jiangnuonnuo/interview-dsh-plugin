@@ -399,7 +399,8 @@ describe('EntryPanel watchCoachTurn', () => {
     expect(screen.getByText('xerina · 八股专项陪练')).toBeDefined();
     expect(screen.getByText('coach by xerina')).toBeDefined();
     expect(screen.queryByRole('log')).toBeNull();
-    expect(document.querySelector('details')).toBeNull();
+    expect(screen.getByText('卡片判断')).toBeDefined();
+    expect(document.querySelector('details:not(.judge)')).toBeNull();
   });
 });
 

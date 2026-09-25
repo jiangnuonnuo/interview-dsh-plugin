@@ -32,6 +32,9 @@ describe('backend DSH adapter boundary', () => {
     expect(source).not.toMatch(/llm\.stream/);
     expect(source).not.toMatch(/agentDefaultModel/);
     expect(source).not.toMatch(/from ['"]node:fs['"]/);
+    expect(source).not.toMatch(/\bfetch\s*\(/);
+    expect(source).not.toMatch(/process\.env/);
+    expect(source).not.toMatch(/jev\.json/);
   });
 
   it('does not register sidebarRightTabs or header buttons', () => {

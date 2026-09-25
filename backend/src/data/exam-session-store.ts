@@ -8,6 +8,7 @@ export interface ExamSessionRecord {
   readonly deck: InterviewDeck;
   readonly ended?: boolean;
   readonly closingSeed?: string;
+  readonly jevAccelerated?: boolean;
 }
 
 export interface ExamSessionStore {

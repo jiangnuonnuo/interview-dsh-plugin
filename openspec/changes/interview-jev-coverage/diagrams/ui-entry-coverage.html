@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>卡片判断连接 · 入口评审稿</title>
+    <style>
+      :root {
+        --ink: #1c2434;
+        --muted: #6b7385;
+        --line: #e6ebf4;
+        --paper: #ffffff;
+        --chip: #eef3ff;
+        --chip-ink: #3d6ae8;
+        --cta: #4d74ff;
+        --ok: #0f766e;
+        --stamp: #c2410c;
+        --select-bg: #f5f9ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: #eef1f6;
+        color: var(--ink);
+        font: 14px/1.5 "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", system-ui, sans-serif;
+      }
+      main {
+        display: grid;
+        gap: 24px;
+        padding: 24px;
+        max-width: 980px;
+        margin: 0 auto;
+      }
+      h1 { font-size: 18px; margin: 0 0 8px; }
+      .note { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+      .stage {
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        gap: 20px;
+        align-items: start;
+      }
+      .phone {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 12px 16px 18px;
+        min-height: 520px;
+      }
+      .chrome {
+        display: flex;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 13px;
+        margin-bottom: 10px;
+      }
+      .brand { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+      .avatar {
+        width: 36px; height: 36px; border-radius: 50%;
+        background: #dbe4ff; color: var(--chip-ink);
+        display: grid; place-items: center; font-weight: 600; font-size: 12px;
+      }
+      .sub { color: var(--muted); font-size: 12px; }
+      .block { font-weight: 600; margin: 14px 0 8px; display: flex; gap: 8px; align-items: center; }
+      .step {
+        width: 18px; height: 18px; border-radius: 50%;
+        background: var(--cta); color: white; font-size: 11px;
+        display: grid; place-items: center;
+      }
+      .diffs { display: flex; gap: 8px; }
+      .diff {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 6px 12px;
+        background: var(--paper);
+      }
+      .diff.on { background: var(--select-bg); border-color: #9ec0ff; color: var(--chip-ink); }
+      details.judge {
+        margin-top: 14px;
+        border: 1px dashed #c7d2fe;
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: #f8faff;
+      }
+      summary { cursor: pointer; font-weight: 600; list-style: none; }
+      summary::-webkit-details-marker { display: none; }
+      .stamp {
+        display: inline-block;
+        margin-left: 8px;
+        border: 1.5px solid var(--stamp);
+        color: var(--stamp);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        padding: 1px 6px;
+        transform: rotate(-6deg);
+      }
+      label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+      input[type="password"] {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 10px;
+        font: inherit;
+      }
+      input:focus { outline: 2px solid var(--cta); outline-offset: 1px; }
+      .hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+      .save {
+        margin-top: 10px;
+        border: 0;
+        background: var(--cta);
+        color: white;
+        border-radius: 8px;
+        padding: 8px 12px;
+        cursor: pointer;
+        font: inherit;
+      }
+      .status { margin-top: 10px; font-size: 12px; color: var(--ok); }
+      .cta {
+        margin-top: 18px;
+        width: 100%;
+        border: 0;
+        background: var(--cta);
+        color: white;
+        border-radius: 10px;
+        padding: 10px;
+        font: inherit;
+        cursor: pointer;
+      }
+      .live-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--chip);
+        color: var(--chip-ink);
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 12px;
+      }
+      .card {
+        margin-top: 16px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 16px;
+        min-height: 180px;
+      }
+      .q { font-weight: 600; }
+      .kp { color: var(--muted); font-size: 13px; margin-top: 8px; }
+      aside {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 16px 18px;
+      }
+      aside h2 { font-size: 14px; margin: 0 0 8px; }
+      aside ul { margin: 0; padding-left: 18px; color: var(--muted); }
+      @media (max-width: 800px) {
+        .stage { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>入口：卡片判断（评审稿）</h1>
+        <p class="note">
+          沿用现有入口色板与 xerina 署名。主题 / 难度仍是开始面试的主路径。
+          「卡片判断」默认关闭；开启必须填密钥，否则仍走对照回退。密钥只写入工作区
+          <code>.dsh-interview/config/jev.json</code>，不进各轮 round 档案，不进考场气泡。
+        </p>
+      </header>
+      <div class="stage">
+        <section class="phone" aria-label="入口待开考">
+          <div class="chrome"><span>关闭</span><span>×</span></div>
+          <div class="brand">
+            <div class="avatar" aria-hidden="true">x</div>
+            <div>
+              <div>xerina</div>
+              <div class="sub">xerina · 八股专项陪练</div>
+            </div>
+          </div>
+          <div class="block"><span class="step">1</span>选择面试主题</div>
+          <div class="diff on">MySQL 索引与优化</div>
+          <div class="block"><span class="step">2</span>面试设置</div>
+          <div class="diffs" role="radiogroup" aria-label="难度">
+            <span class="diff">初级</span>
+            <span class="diff on">中级</span>
+            <span class="diff">高级</span>
+          </div>
+          <details class="judge">
+            <summary>卡片判断 <span class="stamp">默认关</span></summary>
+            <p class="hint">填写密钥后先测连通，通过才保存到 <code>.dsh-interview/config/jev.json</code>。失败不写入，本场仍走对照回退。</p>
+            <label><input type="checkbox" /> 开启 Jev 定档</label>
+            <label for="key">Jev 密钥（开启后必填，连通成功才保存）</label>
+            <input id="key" type="password" autocomplete="off" placeholder="粘贴密钥" />
+            <button class="save" type="button">测试连通并保存</button>
+            <div class="status">已关闭 · 将走对照回退</div>
+          </details>
+          <button class="cta" type="button">开始模拟面试</button>
+        </section>
+        <aside>
+          <h2>交互约定</h2>
+          <ul>
+            <li>默认折叠且开关关闭。打开开关但不填密钥：该区域可见失败，不挡开始。</li>
+            <li>连通成功才写入 <code>.dsh-interview/config/jev.json</code>；失败不保存。再次打开不回显明文。</li>
+            <li>Jev 调用失败：静默回退对照，不是报错弹窗。</li>
+            <li>进行中不出现 miss / Jev 字样；已开启且命中才可出现「判断已加速」。</li>
+            <li>同一知识点最多 3 次 reask，再多由代码换方向。</li>
+          </ul>
+          <h2>进行中顶栏（最大可见）</h2>
+          <p class="live-chip">判断已加速</p>
+          <div class="card">
+            <div class="q">Q1 · 聚簇索引为什么把行数据放在叶子？</div>
+            <div class="kp">开卷要点仍由 DSH 默认模型生成。定档不写在这张卡上。</div>
+          </div>
+        </aside>
+      </div>
+    </main>
+  </body>
+</html>

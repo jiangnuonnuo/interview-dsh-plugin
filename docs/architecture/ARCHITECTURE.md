@@ -92,10 +92,10 @@ frontend/infra/dsh            backend/infra/dsh
 
 - 只出现在 `backend/src/infra/dsh/`。
 - Host 需要的服务在 `apply` 的 `inject` 里声明（当前：`agents`、`llm`、`agentDefaultModel`、`fs`）。查不到时用 `ctx.get('…')` 探测，仍没有就返回对应错误码。
-- 文件系统只走 Host `ctx.fs`：先 `ctx.fs.resolve(rel, { cwd })` 得到 FsTarget 再写，并带工作区写入策略。禁止 `node:fs`，不得把路径字符串直接传给 `writeText`。工作区根是考场会话 `header.cwd`；相对路径为 `.dsh-interview/<考场 sessionId>/round-<n>-<slug>/`（`session.json`、`cards/<id>.md`、结束时的 `qa.md` 与 `summary.md`），会话根另写 `index.json`（`in_progress` | `ended`）。读盘用同一公式，不依赖进程内路径表。旧的会话根 `session.json` 仍可按进行中恢复。
+- 文件系统只走 Host `ctx.fs`：先 `ctx.fs.resolve(rel, { cwd })` 得到 FsTarget 再写，并带工作区写入策略。禁止 `node:fs`，不得把路径字符串直接传给 `writeText`。工作区根是考场会话 `header.cwd`；相对路径为 `.dsh-interview/<考场 sessionId>/round-<n>-<slug>/`（`session.json`、`cards/<id>.md`、结束时的 `qa.md` 与 `summary.md`），会话根另写 `index.json`（`in_progress` | `ended`）。可选 Jev 定档的开关与密钥固定写在 `.dsh-interview/config/jev.json`；开启写入前须连通成功，失败不得落盘；不得写入各轮 `round-*`。读盘用同一公式，不依赖进程内路径表。旧的会话根 `session.json` 仍可按进行中恢复。
 - 禁止在 Host 注册 Slot、右栏 tab 或输入栏按钮。
 - 端口清单、各端口的行为与错误码由对应 OpenSpec change 定义；本层只负责把能力交给正确的会话。
-- 教练输出不得进对话气泡；追问阶段插件不得再向考场会话 `prompt` 催题。下一问约束写在考场 `interview:chain` 系统段（order 2），由领域层按难度裁剪后再挂上，逐题替换。结束本轮先摘掉该段，再挂收尾段。结束本轮允许且仅允许 Client 对考场 `prompt` 一次短句「结束面试」；收尾导演词走 Host `systemPrompt.section`，不得进用户气泡。插件可见用户句只有开场「开始本场八股专项模拟面试。」和「结束面试」。Host 适配层不得 `session.prompt`。
+- 教练输出不得进对话气泡；追问阶段插件不得再向考场会话 `prompt` 催题。下一问约束写在考场 `interview:chain` 系统段（order 2），由领域层按难度裁剪后再挂上，逐题替换；替换必须等考场 Agent idle，不得在面试官仍在生成时改系统段。结束本轮先摘掉该段，再挂收尾段。结束本轮允许且仅允许 Client 对考场 `prompt` 一次短句「结束面试」；收尾导演词走 Host `systemPrompt.section`，不得进用户气泡。插件可见用户句只有开场「开始本场八股专项模拟面试。」和「结束面试」。Host 适配层不得 `session.prompt`。
 - 读会话日志的符号缺失时标 `TODO` 并返回对应错误码，禁止吞成 internal。
 
 ### 4.2 Client 适配层
@@ -109,7 +109,7 @@ frontend/infra/dsh            backend/infra/dsh
 
 ## 5. 会话隔离
 
-开始面试后是两条会话。会话 A 默认是 **新开的 DSH 对话**（Client `sessions.create`），不是把面试官注入用户正在写代码的那条对话。创建时必须带当前工作区 `workspaceId`（Host 才会 `attachSession`，会话出现在该项目分组下）。仅传 `cwd` 只会写入目录、侧栏进「未分组」。`workspaceId` 从 `workspaces.list` 解析：当前会话已在某工作区账户里则用该 id；否则顶栏 `recentWorkspaceId`；否则 `cwd` 与 `items[].path` 对齐；都没有时才退回 `create({ cwd })`。当宿主当前会话已是本插件考场且轮次索引为 `ended` 时，再开始必须复用该会话：不 `create`、不重挂人设、不 `open` 到别处，只发新一轮开口。配置仍来自当前工作区 / 默认模型，插件不得另配 Key。具体开口文案与面板字段由当前 OpenSpec change 定义。
+开始面试后是两条会话。会话 A 默认是 **新开的 DSH 对话**（Client `sessions.create`），不是把面试官注入用户正在写代码的那条对话。创建时必须带当前工作区 `workspaceId`（Host 才会 `attachSession`，会话出现在该项目分组下）。仅传 `cwd` 只会写入目录、侧栏进「未分组」。`workspaceId` 从 `workspaces.list` 解析：当前会话已在某工作区账户里则用该 id；否则顶栏 `recentWorkspaceId`；否则 `cwd` 与 `items[].path` 对齐；都没有时才退回 `create({ cwd })`。当宿主当前会话已是本插件考场且轮次索引为 `ended` 时，再开始必须复用该会话：不 `create`、不重挂人设、不 `open` 到别处，只发新一轮开口。开口、要点、知识链、评语与五维仍来自当前工作区 / 默认模型。可选定档（Jev）默认关闭，密钥仅在连通成功后写入 `.dsh-interview/config/jev.json`，不得拿它替换宿主生成模型。具体开口文案与面板字段由当前 OpenSpec change 定义。
 
 两条会话的产品角色见 `docs/product/REQUIREMENTS.md`。
 
@@ -118,7 +118,7 @@ frontend/infra/dsh            backend/infra/dsh
 | A 对话 / 面试官 | 读场前历史；看见评分/标准答提示词；领域层直接调 Host SDK |
 | B 面板 / 教练 | 任何输出进入气泡；读场前历史；前端做评分判定 |
 
-允许：A 的问答作为材料单向交给 B。禁止：B 回流到 A。第一问之后的追问由宿主对话继续；插件在作答前把裁剪后的知识链挂到 `interview:chain`，不把链文案或评分提示写进消息。开卡只认对照的覆盖结果：一点没答上或缺口大留在原卡并叠作答，追深或换大方面开 `Qn.m`，意图达到或换知识点才开下一个 `Qn`。题数不决定换题。追问阶段不得再向 A `prompt`。结束本轮先摘知识链段，再允许那一次收尾 `prompt`，可见正文为「结束面试」。
+允许：A 的问答作为材料单向交给 B。禁止：B 回流到 A。第一问之后的追问由宿主对话继续；插件在作答前把裁剪后的知识链挂到 `interview:chain`，不把链文案或评分提示写进消息。开卡认定档结果：默认关闭或失败时用对照 JSON 的 `coverage`；已开启且 Jev 命中时用 Jev（再加同一知识点最多 3 次 `reask` 的代码盖帽）。一点没答上或缺口大留在原卡并叠作答，追深或换大方面开 `Qn.m`，意图达到或换知识点才开下一个 `Qn`。面试官开口仍不等定档；Jev 命中后也不得在开口未结束时替换 `interview:chain`。题数不决定换题。追问阶段不得再向 A `prompt`。结束本轮先摘知识链段，再允许那一次收尾 `prompt`，可见正文为「结束面试」。
 
 结束时不得卸下面试官，考场会话保持。面板「结束本场」先停看守，Host 挂收尾导演词，再短句收尾并写本轮 `qa.md` 与 `summary.md`，然后回到入口，不切换宿主当前会话。新一轮开口前摘掉收尾段。适配层查不到注入 API 时标 `TODO`，禁止用自建聊天绕过。
 
@@ -136,7 +136,7 @@ frontend/infra/dsh            backend/infra/dsh
 
 ## 7. 安全边界
 
-- 禁止在业务代码中硬编码 API Key / Token / 密码。敏感数据默认脱敏，不暴露给前端。
+- 禁止在业务代码中硬编码 API Key / Token / 密码。敏感数据默认脱敏，不暴露给前端。可选 Jev 密钥只存在工作区 `.dsh-interview/config/jev.json`（连通失败不得写入），GET 配置只回是否已保存，不回明文。
 - 前端不做加密、解密、权限判断、评分判定。
 - 面试活跃路径禁止不可取消的异步工作；评估请求必须可随会话结束取消。
 - 禁止引入未随桌面端提供、也未经当前 change 确认的依赖。

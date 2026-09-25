@@ -124,6 +124,12 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
   const [customTopic, setCustomTopic] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty>(DEFAULT_DIFFICULTY);
   const [error, setError] = useState<string | null>(null);
+  const [jevEnabled, setJevEnabled] = useState(false);
+  const [jevKey, setJevKey] = useState('');
+  const [jevKeySet, setJevKeySet] = useState(false);
+  const [jevConfigError, setJevConfigError] = useState<string | null>(null);
+  const [jevSaving, setJevSaving] = useState(false);
+  const [jevAccelerated, setJevAccelerated] = useState(false);
   const [qaPath, setQaPath] = useState<string | null>(null);
   const [summaryPath, setSummaryPath] = useState<string | null>(null);
   const deck = useSyncExternalStore(
@@ -162,6 +168,33 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
       .catch((cause: unknown) => {
         if (!cancelled) {
           setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      });
+    port
+      .getJevConfig()
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        if (!response.ok) {
+          setJevConfigError(response.message);
+          setJevEnabled(false);
+          setJevKeySet(false);
+          return;
+        }
+        if (!response.enabled && !response.apiKeySet) {
+          return;
+        }
+        setJevEnabled(response.enabled);
+        setJevKeySet(response.apiKeySet);
+        setJevKey('');
+        setJevConfigError(
+          response.enabled && !response.apiKeySet ? '开启卡片判断需要填写 Jev 密钥。' : null,
+        );
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setJevConfigError(cause instanceof Error ? cause.message : String(cause));
         }
       });
     return () => {
@@ -216,6 +249,9 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
       if (result.status === 'updated') {
         setWatchError(null);
         examPanelState.set(result.deck);
+      }
+      if (result.jevAccelerated === true) {
+        setJevAccelerated(true);
       }
       return true;
     };
@@ -274,6 +310,9 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
         setWatchError(null);
         examPanelState.set(result.deck);
       }
+      if (result.jevAccelerated === true) {
+        setJevAccelerated(true);
+      }
     } catch (cause: unknown) {
       if (!aliveRef.current) {
         return;
@@ -282,6 +321,38 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
     } finally {
       if (aliveRef.current) {
         setRefreshing(false);
+      }
+    }
+  };
+
+  const saveJev = async (): Promise<boolean> => {
+    setJevSaving(true);
+    setJevConfigError(null);
+    try {
+      const result = await port.saveJevConfig({
+        enabled: jevEnabled,
+        apiKey: jevKey.trim().length > 0 ? jevKey : undefined,
+      });
+      if (!aliveRef.current) {
+        return false;
+      }
+      if (!result.ok) {
+        setJevConfigError(result.message);
+        return false;
+      }
+      setJevEnabled(result.enabled);
+      setJevKeySet(result.apiKeySet);
+      setJevKey('');
+      setJevConfigError(result.enabled && !result.apiKeySet ? '开启卡片判断需要填写 Jev 密钥。' : null);
+      return true;
+    } catch (cause: unknown) {
+      if (aliveRef.current) {
+        setJevConfigError(cause instanceof Error ? cause.message : String(cause));
+      }
+      return false;
+    } finally {
+      if (aliveRef.current) {
+        setJevSaving(false);
       }
     }
   };
@@ -300,6 +371,9 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
     setQaPath(null);
     setSummaryPath(null);
     try {
+      if (jevEnabled) {
+        await saveJev();
+      }
       const result = await port.startInterview({
         topicId,
         customTopic,
@@ -317,6 +391,7 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
       }
       setWatchError(null);
       examPanelState.set(result.deck);
+      setJevAccelerated(false);
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -341,6 +416,7 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
         setRefreshing(false);
         setEnding(false);
         endingRef.current = false;
+        setJevAccelerated(false);
         setQaPath(result.ok || result.qaPath !== undefined ? (result.qaPath ?? null) : null);
         setSummaryPath(
           result.ok || result.summaryPath !== undefined ? (result.summaryPath ?? null) : null,
@@ -370,6 +446,7 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
       <InProgressPanel
         deck={deck}
         error={watchError}
+        jevAccelerated={jevAccelerated}
         onClose={onClose}
         onRefresh={() => {
           void refreshCoach();
@@ -489,6 +566,61 @@ export const EntryPanel = ({ port, onClose, onExamLive }: EntryPanelProps) => {
               </button>
             ))}
           </div>
+          <details className={styles.judge}>
+            <summary>
+              卡片判断{' '}
+              <span className={styles.judgeStamp}>{jevEnabled && jevKeySet ? '已连通' : '默认关'}</span>
+            </summary>
+            <p className={styles.hint}>
+              填写密钥后先测连通，通过才保存，之后复用。失败不写入，本场仍走对照回退。开始面试也会先测一次。
+            </p>
+            <label className={styles.judgeToggle}>
+              <input
+                type="checkbox"
+                checked={jevEnabled}
+                onChange={(event) => {
+                  setJevEnabled(event.target.checked);
+                  if (!event.target.checked) {
+                    setJevConfigError(null);
+                  }
+                }}
+              />
+              开启 Jev 定档
+            </label>
+            <label className={styles.judgeKey} htmlFor="jev-key">
+              Jev 密钥（开启后必填，连通成功才保存）
+            </label>
+            <input
+              id="jev-key"
+              className={styles.judgeKeyInput}
+              type="password"
+              autoComplete="off"
+              value={jevKey}
+              placeholder={jevKeySet ? '已保存密钥' : '粘贴密钥'}
+              onChange={(event) => setJevKey(event.target.value)}
+            />
+            <button
+              className={styles.judgeSave}
+              type="button"
+              onClick={() => void saveJev()}
+              disabled={jevSaving || submitting}
+            >
+              {jevSaving ? '正在测试连通…' : '测试连通并保存'}
+            </button>
+            {jevConfigError ? (
+              <p className={styles.error} role="alert">
+                {jevConfigError}
+              </p>
+            ) : (
+              <p className={styles.hint}>
+                {jevEnabled
+                  ? jevKeySet
+                    ? '已连通并保存 · 作答应加速定档'
+                    : '打开开关后填密钥，连通成功才会保存'
+                  : '已关闭 · 将走对照回退'}
+              </p>
+            )}
+          </details>
           {error ? (
             <p className={styles.error} role="alert">
               {error}

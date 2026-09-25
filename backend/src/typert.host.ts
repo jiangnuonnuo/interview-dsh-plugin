@@ -128,16 +128,55 @@ const watchResultSchema = z.union([
     ok: z.literal(true),
     status: z.literal('updated'),
     deck: deckSchema,
+    jevAccelerated: z.boolean().optional(),
   }),
   z.object({
     ok: z.literal(true),
     status: z.literal('unchanged'),
+    jevAccelerated: z.boolean().optional(),
   }),
   z.object({
     ok: z.literal(false),
     code: sessionErrorSchema,
     message: z.string(),
     deck: deckSchema.optional(),
+    jevAccelerated: z.boolean().optional(),
+  }),
+]);
+
+const getJevRequestSchema = z.object({
+  sessionId: z.string().optional(),
+});
+
+const getJevResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    enabled: z.boolean(),
+    apiKeySet: z.boolean(),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: z.literal('persist_unavailable'),
+    message: z.string(),
+  }),
+]);
+
+const saveJevRequestSchema = z.object({
+  enabled: z.boolean(),
+  apiKey: z.string().optional(),
+  sessionId: z.string().optional(),
+});
+
+const saveJevResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    enabled: z.boolean(),
+    apiKeySet: z.boolean(),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: z.enum(['persist_unavailable', 'jev_key_required', 'jev_unreachable']),
+    message: z.string(),
   }),
 ]);
 
@@ -240,6 +279,26 @@ const _watchResult$codec = {
   typeSymbol: 'interview-dsh#WatchCoachTurnResponse',
   schema: watchResultSchema,
 };
+const _getJevRequest$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#GetJevConfigRequest',
+  schema: getJevRequestSchema,
+};
+const _getJevResult$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#GetJevConfigResponse',
+  schema: getJevResultSchema,
+};
+const _saveJevRequest$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#SaveJevConfigRequest',
+  schema: saveJevRequestSchema,
+};
+const _saveJevResult$codec = {
+  mode: 'strict' as const,
+  typeSymbol: 'interview-dsh#SaveJevConfigResponse',
+  schema: saveJevResultSchema,
+};
 const _loadRequest$codec = {
   mode: 'strict' as const,
   typeSymbol: 'interview-dsh#LoadDeckRequest',
@@ -305,6 +364,28 @@ export const TYPERT = {
       invocation: { kind: 'direct' as const },
       parameters: [],
       result: _get$codec,
+    },
+    {
+      id: 'interview-dsh#interviewEntry/getJevConfig',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'getJevConfig',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        { name: 'request', wire: 'request', source: 'json' as const, codec: _getJevRequest$codec },
+      ],
+      result: _getJevResult$codec,
+    },
+    {
+      id: 'interview-dsh#interviewEntry/saveJevConfig',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'saveJevConfig',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        { name: 'request', wire: 'request', source: 'json' as const, codec: _saveJevRequest$codec },
+      ],
+      result: _saveJevResult$codec,
     },
     {
       id: 'interview-dsh#interviewEntry/attachInterviewer',
@@ -401,7 +482,7 @@ export const TYPERT = {
         description: 'interview-dsh 入口配置服务，校验并保存主题与难度。',
         summary: '八股专项入口配置服务。',
         tags: [],
-        jsDoc: '/** 入口配置：acceptEntryConfig / getEntryConfig / attachInterviewer / briefCoach / watchCoachTurn / loadDeck / endRound / armRoundClose / clearRoundClose / getExamRoundState */',
+        jsDoc: '/** 入口配置：acceptEntryConfig / getEntryConfig / getJevConfig / saveJevConfig / attachInterviewer / briefCoach / watchCoachTurn / loadDeck / endRound / armRoundClose / clearRoundClose / getExamRoundState */',
         key: 'interviewEntry',
         exportName: 'InterviewEntryService',
         members: [
@@ -418,6 +499,20 @@ export const TYPERT = {
             signature: 'getEntryConfig(): GetEntryConfigResponse',
             summary: '读取最近一次有效入口配置。',
             jsDoc: '/** 读取最近一次有效入口配置；尚未开始时 config 为 null。 */',
+          },
+          {
+            kind: 'method',
+            name: 'getJevConfig',
+            signature: 'getJevConfig(request?: GetJevConfigRequest): Promise<GetJevConfigResponse>',
+            summary: '读取卡片判断开关与是否已保存密钥，不回明文。',
+            jsDoc: '/** GET 只回 enabled 与 apiKeySet。 */',
+          },
+          {
+            kind: 'method',
+            name: 'saveJevConfig',
+            signature: 'saveJevConfig(request: SaveJevConfigRequest): Promise<SaveJevConfigResponse>',
+            summary: '把开关与密钥写入工作区固定配置文件。',
+            jsDoc: '/** 开启时先测 Jev 连通，通过才写入 .dsh-interview/config/jev.json。 */',
           },
           {
             kind: 'method',

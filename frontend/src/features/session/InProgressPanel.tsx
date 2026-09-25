@@ -27,6 +27,7 @@ import styles from './InProgressPanel.module.css';
 export interface InProgressPanelProps {
   deck: InterviewDeck;
   error?: string | null;
+  jevAccelerated?: boolean;
   onClose?: () => void;
   onRefresh?: () => void;
   onEnd?: () => void;
@@ -182,6 +183,7 @@ const PeekCard = ({
 export const InProgressPanel = ({
   deck,
   error,
+  jevAccelerated = false,
   onClose,
   onRefresh,
   onEnd,
@@ -462,6 +464,7 @@ export const InProgressPanel = ({
         <p className={styles.live}>
           <span className={styles.dot} aria-hidden="true" />
           进行中 · 八股专项
+          {jevAccelerated ? <span className={styles.accel}>判断已加速</span> : null}
         </p>
         {onEnd !== undefined ? (
           <button

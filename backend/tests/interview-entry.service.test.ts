@@ -2,8 +2,23 @@
  * @jest-environment node
  */
 
+import { JEV_CONFIG_ERROR_MESSAGES } from 'interview-dsh-shared';
 import { createEntryConfigStore } from '../src/data/entry-config-store.js';
+import { emptyJevSecret, type JevConfigStore, type JevSecretConfig } from '../src/data/jev-config.js';
 import { createInterviewEntryService } from '../src/services/interview-entry.service.js';
+
+const memoryJev = (secret: JevSecretConfig, writes: unknown[] = []): JevConfigStore => ({
+  async loadPublic() {
+    return { ok: true, enabled: secret.enabled, apiKeySet: secret.apiKey.length > 0 };
+  },
+  async loadSecret() {
+    return secret;
+  },
+  async save(input) {
+    writes.push(input);
+    return { ok: true, enabled: input.enabled, apiKeySet: (input.apiKey ?? secret.apiKey).length > 0 };
+  },
+});
 
 const mysqlRequest = {
   topicId: 'mysql',
@@ -86,5 +101,65 @@ describe('interview-entry.service', () => {
     expect(text).toContain('MySQL 索引与优化');
     expect(text).toContain('八股专项');
     expect(text).not.toMatch(/标准答要点/);
+  });
+
+  it('does not write the key when Jev probe fails', async () => {
+    const writes: unknown[] = [];
+    const service = createInterviewEntryService(
+      createEntryConfigStore(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        jevConfig: memoryJev(emptyJevSecret(), writes),
+        probeJev: async () => false,
+      },
+    );
+    const result = await service.saveJevConfig({ enabled: true, apiKey: 'sk-bad' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('jev_unreachable');
+      expect(result.message).toBe(JEV_CONFIG_ERROR_MESSAGES.jev_unreachable);
+    }
+    expect(writes).toHaveLength(0);
+  });
+
+  it('writes the key only after a successful probe', async () => {
+    const writes: unknown[] = [];
+    const service = createInterviewEntryService(
+      createEntryConfigStore(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        jevConfig: memoryJev(emptyJevSecret(), writes),
+        probeJev: async () => true,
+      },
+    );
+    const result = await service.saveJevConfig({ enabled: true, apiKey: 'sk-live' });
+    expect(result).toEqual({ ok: true, enabled: true, apiKeySet: true });
+    expect(writes).toEqual([{ enabled: true, apiKey: 'sk-live' }]);
+  });
+
+  it('does not probe when turning Jev off', async () => {
+    const writes: unknown[] = [];
+    const probeJev = jest.fn(async () => true);
+    const service = createInterviewEntryService(
+      createEntryConfigStore(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        jevConfig: memoryJev({ enabled: true, apiKey: 'sk-kept' }, writes),
+        probeJev,
+      },
+    );
+    const result = await service.saveJevConfig({ enabled: false });
+    expect(result).toEqual({ ok: true, enabled: false, apiKeySet: true });
+    expect(probeJev).not.toHaveBeenCalled();
+    expect(writes).toEqual([{ enabled: false, apiKey: 'sk-kept' }]);
   });
 });

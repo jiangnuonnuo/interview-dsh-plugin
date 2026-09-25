@@ -1,4 +1,5 @@
 export * from './types/plugin-config.js';
 export * from './api/interview-entry.js';
 export * from './api/interview-session.js';
+export * from './api/interview-jev.js';
 export * from './errors/common.js';

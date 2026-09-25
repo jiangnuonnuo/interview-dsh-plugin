@@ -245,13 +245,19 @@ export interface WatchCoachTurnRequest {
 }
 
 export type WatchCoachTurnResponse =
-  | { readonly ok: true; readonly status: 'updated'; readonly deck: InterviewDeck }
-  | { readonly ok: true; readonly status: 'unchanged' }
+  | {
+      readonly ok: true;
+      readonly status: 'updated';
+      readonly deck: InterviewDeck;
+      readonly jevAccelerated?: boolean;
+    }
+  | { readonly ok: true; readonly status: 'unchanged'; readonly jevAccelerated?: boolean }
   | {
       readonly ok: false;
       readonly code: InterviewSessionErrorCode;
       readonly message: string;
       readonly deck?: InterviewDeck;
+      readonly jevAccelerated?: boolean;
     };
 
 export interface LoadDeckRequest {

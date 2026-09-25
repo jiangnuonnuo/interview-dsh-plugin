@@ -2,6 +2,8 @@ import { createExamSessionStore } from '../../data/exam-session-store.js';
 import { createInterviewEntryPort } from '../../entrypoints/interview-entry.js';
 import { attachInterviewerPersona, clearChainSection, clearRoundClosingSection, installChainSection, installRoundClosingSection, type PersonaHostContext } from './interviewer-persona.js';
 import { createHostCoachRuntime, type CoachHostContext } from './coach.js';
+import { createJevCoveragePort, probeJevKey } from './jev-coverage.js';
+import { createFsJevConfigStore } from './jev-config-fs.js';
 import { createFsWorkspaceArchive, type WorkspaceTextFs } from './workspace-fs.js';
 
 export const name = 'interview-dsh';
@@ -61,11 +63,14 @@ const sessionCwd = (value: unknown): string | undefined => {
 export function apply(ctx: HostContext): void {
   const examSessions = createExamSessionStore();
   const fs = asTextFs(ctx.fs) ?? asTextFs(readService(ctx, 'fs'));
-  const archive = createFsWorkspaceArchive(fs, {
-    cwdFor(sessionId) {
+  const workspace = {
+    cwdFor(sessionId: string) {
       return sessionCwd(ctx.agents?.get(sessionId));
     },
-  });
+  };
+  const archive = createFsWorkspaceArchive(fs, workspace);
+  const jevConfig = createFsJevConfigStore(fs, workspace);
+  const coverage = createJevCoveragePort(jevConfig);
   ctx.provide(
     'interviewEntry',
     bindInterviewEntry(
@@ -91,6 +96,7 @@ export function apply(ctx: HostContext): void {
         createHostCoachRuntime(ctx),
         examSessions,
         archive,
+        { jevConfig, coverage, probeJev: (apiKey) => probeJevKey(apiKey) },
       ),
     ),
   );

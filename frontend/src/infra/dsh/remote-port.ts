@@ -13,8 +13,12 @@ import {
   type GetEntryConfigResponse,
   type GetExamRoundStateRequest,
   type GetExamRoundStateResponse,
+  type GetJevConfigRequest,
+  type GetJevConfigResponse,
   type LoadDeckRequest,
   type LoadDeckResponse,
+  type SaveJevConfigRequest,
+  type SaveJevConfigResponse,
   type WatchCoachTurnRequest,
   type WatchCoachTurnResponse,
 } from 'interview-dsh-shared';
@@ -44,6 +48,8 @@ const unwrap = async <T>(result: Promise<T | GatewayEnvelope<T>>, method: string
 export interface InterviewRemote {
   acceptEntryConfig: (request: AcceptEntryConfigRequest) => Promise<unknown>;
   getEntryConfig: () => Promise<unknown>;
+  getJevConfig: (request: GetJevConfigRequest) => Promise<unknown>;
+  saveJevConfig: (request: SaveJevConfigRequest) => Promise<unknown>;
   attachInterviewer: (request: AttachInterviewerRequest) => Promise<unknown>;
   briefCoach: (request: BriefCoachRequest) => Promise<unknown>;
   watchCoachTurn: (request: WatchCoachTurnRequest) => Promise<unknown>;
@@ -96,6 +102,25 @@ export const createInterviewPort = (
     getEntryConfig() {
       return unwrap(remote.getEntryConfig() as Promise<GetEntryConfigResponse>, 'getEntryConfig');
     },
+    getJevConfig() {
+      const current = resolveSessions(sessions)?.list?.getSnapshot?.()?.current;
+      const sessionId = typeof current === 'string' && current.length > 0 ? current : undefined;
+      return unwrap(
+        remote.getJevConfig(sessionId !== undefined ? { sessionId } : {}) as Promise<GetJevConfigResponse>,
+        'getJevConfig',
+      );
+    },
+    saveJevConfig(request) {
+      const current = resolveSessions(sessions)?.list?.getSnapshot?.()?.current;
+      const sessionId = typeof current === 'string' && current.length > 0 ? current : undefined;
+      return unwrap(
+        remote.saveJevConfig({
+          ...request,
+          ...(sessionId !== undefined ? { sessionId } : {}),
+        }) as Promise<SaveJevConfigResponse>,
+        'saveJevConfig',
+      );
+    },
     startInterview(request) {
       return startInterview(
         {
@@ -145,6 +170,12 @@ export const createUnavailableEntryPort = (reason: string): EntryPort => ({
   },
   async getEntryConfig() {
     return { config: null };
+  },
+  async getJevConfig() {
+    return { ok: true as const, enabled: false, apiKeySet: false };
+  },
+  async saveJevConfig() {
+    throw new Error(reason);
   },
   async startInterview() {
     throw new Error(reason);

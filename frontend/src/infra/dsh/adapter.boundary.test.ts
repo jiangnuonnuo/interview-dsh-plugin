@@ -52,10 +52,11 @@ describe('frontend DSH adapter boundary', () => {
       .filter((file) => /\.(ts|tsx)$/.test(file) && !file.includes('.test.'))
       .map((file) => readFileSync(file, 'utf8'))
       .join('\n');
-    expect(source).not.toMatch(/score:\s*[0-9]/);
-    expect(source).not.toMatch(/status:\s*['"]scored['"]/);
-    expect(source).not.toMatch(/<details/);
-    expect(source).not.toMatch(/HandbookPreview/);
+    const withoutJudgeFold = source.replace(/<details className=\{styles\.judge\}>[\s\S]*?<\/details>/g, '');
+    expect(withoutJudgeFold).not.toMatch(/score:\s*[0-9]/);
+    expect(withoutJudgeFold).not.toMatch(/status:\s*['"]scored['"]/);
+    expect(withoutJudgeFold).not.toMatch(/<details/);
+    expect(withoutJudgeFold).not.toMatch(/HandbookPreview/);
     expect(source).not.toMatch(/markdown-editor/i);
     expect(source).not.toMatch(/swiper/i);
   });

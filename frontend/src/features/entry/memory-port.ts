@@ -32,10 +32,12 @@ const memoryDeck = (topic: string, difficulty: EntryConfig['difficulty'], brief:
     currentCardId: 'Q1',
   });
 
-export const createMemoryEntryPort = (): EntryPort => {
+export const createMemoryEntryPort = (options?: { readonly jevProbeFails?: boolean }): EntryPort => {
   let current: EntryConfig | null = null;
   let watchCalls = 0;
   let deck: InterviewDeck | null = null;
+  let jevEnabled = false;
+  let jevKeySet = false;
   return {
     async acceptEntryConfig(request: AcceptEntryConfigRequest): Promise<AcceptEntryConfigResponse> {
       if (!isDifficulty(request.difficulty)) {
@@ -72,6 +74,30 @@ export const createMemoryEntryPort = (): EntryPort => {
     },
     async getEntryConfig(): Promise<GetEntryConfigResponse> {
       return { config: current };
+    },
+    async getJevConfig() {
+      return { ok: true as const, enabled: jevEnabled, apiKeySet: jevKeySet };
+    },
+    async saveJevConfig(request) {
+      if (request.enabled && !request.apiKey?.trim() && !jevKeySet) {
+        return {
+          ok: false as const,
+          code: 'jev_key_required' as const,
+          message: '开启卡片判断需要填写 Jev 密钥。',
+        };
+      }
+      if (request.enabled && options?.jevProbeFails === true) {
+        return {
+          ok: false as const,
+          code: 'jev_unreachable' as const,
+          message: 'Jev 连通失败，密钥未保存，本场走对照回退。',
+        };
+      }
+      jevEnabled = request.enabled;
+      if (request.apiKey?.trim()) {
+        jevKeySet = true;
+      }
+      return { ok: true as const, enabled: jevEnabled, apiKeySet: jevKeySet };
     },
     async startInterview(request: AcceptEntryConfigRequest): Promise<StartInterviewResponse> {
       const accepted = await this.acceptEntryConfig(request);

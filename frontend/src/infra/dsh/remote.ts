@@ -128,16 +128,55 @@ const watchResultSchema = z.union([
     ok: z.literal(true),
     status: z.literal('updated'),
     deck: deckSchema,
+    jevAccelerated: z.boolean().optional(),
   }),
   z.object({
     ok: z.literal(true),
     status: z.literal('unchanged'),
+    jevAccelerated: z.boolean().optional(),
   }),
   z.object({
     ok: z.literal(false),
     code: sessionErrorSchema,
     message: z.string(),
     deck: deckSchema.optional(),
+    jevAccelerated: z.boolean().optional(),
+  }),
+]);
+
+const getJevRequestSchema = z.object({
+  sessionId: z.string().optional(),
+});
+
+const getJevResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    enabled: z.boolean(),
+    apiKeySet: z.boolean(),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: z.literal('persist_unavailable'),
+    message: z.string(),
+  }),
+]);
+
+const saveJevRequestSchema = z.object({
+  enabled: z.boolean(),
+  apiKey: z.string().optional(),
+  sessionId: z.string().optional(),
+});
+
+const saveJevResultSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    enabled: z.boolean(),
+    apiKeySet: z.boolean(),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: z.enum(['persist_unavailable', 'jev_key_required', 'jev_unreachable']),
+    message: z.string(),
   }),
 ]);
 
@@ -229,6 +268,38 @@ export const interviewEntryRemote = {
       invocation: { kind: 'direct' as const },
       parameters: [],
       result: strict('interview-dsh#GetEntryConfigResponse', getResultSchema),
+    },
+    {
+      id: 'interview-dsh#interviewEntry/getJevConfig',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'getJevConfig',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        {
+          name: 'request',
+          wire: 'request',
+          source: 'json' as const,
+          codec: strict('interview-dsh#GetJevConfigRequest', getJevRequestSchema),
+        },
+      ],
+      result: strict('interview-dsh#GetJevConfigResponse', getJevResultSchema),
+    },
+    {
+      id: 'interview-dsh#interviewEntry/saveJevConfig',
+      service: 'interviewEntry',
+      namespace: 'interviewEntry',
+      method: 'saveJevConfig',
+      invocation: { kind: 'direct' as const },
+      parameters: [
+        {
+          name: 'request',
+          wire: 'request',
+          source: 'json' as const,
+          codec: strict('interview-dsh#SaveJevConfigRequest', saveJevRequestSchema),
+        },
+      ],
+      result: strict('interview-dsh#SaveJevConfigResponse', saveJevResultSchema),
     },
     {
       id: 'interview-dsh#interviewEntry/attachInterviewer',

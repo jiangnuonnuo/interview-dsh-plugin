@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "mode": "architecture",
+  "template_type": "architecture",
+  "style": 1,
+  "quality_profile": "standard",
+  "width": 960,
+  "height": 560,
+  "title": "发送后谁先动",
+  "subtitle": "面试官开口不依赖定档；卡片听定档；评语可以后到",
+  "nodes": [
+    { "id": "send", "kind": "rect", "x": 80, "y": 110, "width": 200, "height": 56, "label": "1 考生发送", "fill": "#eff6ff", "stroke": "#bfdbfe", "flat": true },
+    { "id": "speak", "kind": "double_rect", "x": 380, "y": 110, "width": 200, "height": 56, "label": "2 面试官开口" },
+    { "id": "watch", "kind": "rect", "x": 680, "y": 110, "width": 200, "height": 56, "label": "3 看守读作答", "fill": "#fff7ed", "stroke": "#fed7aa", "flat": true },
+    { "id": "jev", "kind": "rect", "x": 80, "y": 280, "width": 200, "height": 56, "label": "4a Jev 五档", "fill": "#fef2f2", "stroke": "#fecaca", "flat": true },
+    { "id": "card", "kind": "rect", "x": 380, "y": 280, "width": 200, "height": 56, "label": "5 代码开卡", "fill": "#f0fdf4", "stroke": "#bbf7d0", "flat": true },
+    { "id": "llm", "kind": "rect", "x": 680, "y": 280, "width": 200, "height": 56, "label": "4b 对照评语", "fill": "#faf5ff", "stroke": "#e9d5ff", "flat": true },
+    { "id": "prose", "kind": "rect", "x": 680, "y": 420, "width": 200, "height": 56, "label": "6 评语写回原卡", "fill": "#faf5ff", "stroke": "#e9d5ff", "flat": true }
+  ],
+  "arrows": [
+    { "id": "s1", "source": "send", "target": "speak", "source_port": "right", "target_port": "left", "flow": "control", "label": "立刻" },
+    { "id": "s2", "source": "speak", "target": "watch", "source_port": "right", "target_port": "left", "flow": "async", "label": "同时" },
+    { "id": "s3", "source": "watch", "target": "jev", "source_port": "left", "target_port": "top", "flow": "data", "label": "定档" },
+    { "id": "s4", "source": "jev", "target": "card", "source_port": "right", "target_port": "left", "flow": "data", "label": "coverage" },
+    { "id": "s5", "source": "watch", "target": "llm", "source_port": "bottom", "target_port": "top", "flow": "read", "label": "评语" },
+    { "id": "s6", "source": "llm", "target": "prose", "source_port": "bottom", "target_port": "top", "flow": "read", "label": "后到" }
+  ],
+  "legend_orientation": "horizontal",
+  "legend_x": 48,
+  "legend_y": 500,
+  "legend": [
+    { "flow": "control", "label": "开口" },
+    { "flow": "data", "label": "定档开卡" },
+    { "flow": "read", "label": "评语" },
+    { "flow": "async", "label": "看守" }
+  ],
+  "footer": "无 Jev 时 4a 消失，5 等 4b 的 coverage",
+  "footer_x": 48,
+  "footer_y": 536
+}

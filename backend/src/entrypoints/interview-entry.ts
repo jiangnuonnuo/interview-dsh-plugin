@@ -1,9 +1,11 @@
 import { createEntryConfigStore } from '../data/entry-config-store.js';
+import type { JevConfigStore } from '../data/jev-config.js';
 import {
   createInterviewEntryService,
   type InterviewerPersonaInstaller,
   type InterviewEntryService,
 } from '../services/interview-entry.service.js';
+import type { CoveragePort } from '../services/coverage-port.js';
 import type { CoachRuntime } from '../services/coach-brief.js';
 import type { ExamSessionStore } from '../data/exam-session-store.js';
 import type { WorkspaceArchive } from '../data/workspace-archive.js';
@@ -21,7 +23,10 @@ export const createInterviewEntryPort = (
   coach?: CoachRuntime,
   examSessions?: ExamSessionStore,
   archive?: WorkspaceArchive,
+  extras?: {
+    readonly jevConfig?: JevConfigStore;
+    readonly coverage?: CoveragePort;
+    readonly probeJev?: (apiKey: string) => Promise<boolean>;
+  },
 ): InterviewEntryService =>
-  coach === undefined
-    ? createInterviewEntryService(store, persona)
-    : createInterviewEntryService(store, persona, coach, examSessions, archive);
+  createInterviewEntryService(store, persona, coach, examSessions, archive, extras);

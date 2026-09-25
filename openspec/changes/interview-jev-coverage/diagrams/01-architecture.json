@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "mode": "architecture",
+  "template_type": "architecture",
+  "style": 1,
+  "quality_profile": "standard",
+  "width": 960,
+  "height": 620,
+  "title": "Jev 定档后的插件分层",
+  "subtitle": "开口仍走宿主对话；定档可走 Jev；评语仍走 DSH 默认模型",
+  "containers": [
+    { "id": "surface", "x": 48, "y": 100, "width": 864, "height": 120, "label": "表面", "header_prefix": "01" },
+    { "id": "plugin", "x": 48, "y": 248, "width": 864, "height": 120, "label": "插件领域", "header_prefix": "02" },
+    { "id": "models", "x": 48, "y": 396, "width": 864, "height": 120, "label": "模型", "header_prefix": "03" }
+  ],
+  "nodes": [
+    { "id": "exam", "kind": "rect", "x": 88, "y": 144, "width": 240, "height": 52, "label": "会话 A 考场", "sublabel": "面试官立刻开口", "fill": "#eff6ff", "stroke": "#bfdbfe", "flat": true },
+    { "id": "cfg", "kind": "rect", "x": 360, "y": 144, "width": 200, "height": 52, "label": "卡片判断配置", "sublabel": "config/jev.json", "fill": "#fff7ed", "stroke": "#fed7aa", "flat": true },
+    { "id": "panel", "kind": "rect", "x": 632, "y": 144, "width": 240, "height": 52, "label": "教练面板", "sublabel": "卡片以后判定档为准", "fill": "#f0fdf4", "stroke": "#bbf7d0", "flat": true },
+    { "id": "watch", "kind": "double_rect", "x": 88, "y": 292, "width": 240, "height": 52, "label": "作答看守" },
+    { "id": "port", "kind": "rect", "x": 360, "y": 292, "width": 200, "height": 52, "label": "定档端口", "sublabel": "五档或回退", "fill": "#faf5ff", "stroke": "#e9d5ff", "flat": true },
+    { "id": "score", "kind": "rect", "x": 632, "y": 292, "width": 240, "height": 52, "label": "对照补全", "sublabel": "评语与五维", "fill": "#faf5ff", "stroke": "#e9d5ff", "flat": true },
+    { "id": "jev", "kind": "rect", "x": 360, "y": 440, "width": 200, "height": 52, "label": "Jev API", "sublabel": "可选 choice", "fill": "#fef2f2", "stroke": "#fecaca", "flat": true },
+    { "id": "llm", "kind": "rect", "x": 632, "y": 440, "width": 240, "height": 52, "label": "DSH 默认模型", "sublabel": "开口 / 要点 / 评语", "fill": "#eff6ff", "stroke": "#bfdbfe", "flat": true }
+  ],
+  "arrows": [
+    { "id": "a1", "source": "exam", "target": "watch", "source_port": "bottom", "target_port": "top", "flow": "async" },
+    { "id": "a2", "source": "watch", "target": "port", "source_port": "right", "target_port": "left", "flow": "data" },
+    { "id": "a3", "source": "watch", "target": "score", "source_port": "right", "target_port": "left", "flow": "read", "corridor_y": [276] },
+    { "id": "a4", "source": "port", "target": "jev", "source_port": "bottom", "target_port": "top", "flow": "control", "label": "choice" },
+    { "id": "a5", "source": "score", "target": "llm", "source_port": "bottom", "target_port": "top", "flow": "read", "label": "complete" },
+    { "id": "a6", "source": "watch", "target": "panel", "source_port": "top", "target_port": "bottom", "flow": "write", "label": "甲板" },
+    { "id": "a7", "source": "cfg", "target": "port", "source_port": "bottom", "target_port": "top", "flow": "read", "label": "enabled" }
+  ],
+  "legend_orientation": "horizontal",
+  "legend_x": 48,
+  "legend_y": 548,
+  "legend": [
+    { "flow": "async", "label": "读考场" },
+    { "flow": "data", "label": "定档" },
+    { "flow": "control", "label": "Jev" },
+    { "flow": "read", "label": "配置 / 评语" },
+    { "flow": "write", "label": "卡片" }
+  ],
+  "footer": "密钥只在 .dsh-interview/config/jev.json · 面试官不等定档",
+  "footer_x": 48,
+  "footer_y": 588
+}

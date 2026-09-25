@@ -115,6 +115,20 @@ describe('createHostCoachRuntime', () => {
     expect(options.model).toBe('step-3.7-flash');
   });
 
+  it('exposes whenIdle on the exam agent', async () => {
+    const whenIdle = jest.fn(async () => undefined);
+    const runtime = createHostCoachRuntime({
+      agents: {
+        get: () => ({
+          whenIdle,
+          session: { snapshotEvents: () => [assistantEvent] },
+        }),
+      },
+    });
+    await runtime.whenIdle?.('session-exam');
+    expect(whenIdle).toHaveBeenCalledTimes(1);
+  });
+
   it('reads the latest assistant when two questions are in the log', async () => {
     const runtime = createHostCoachRuntime({
       agents: {

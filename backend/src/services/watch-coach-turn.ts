@@ -3,6 +3,7 @@ import {
   answerTurnsOf,
   coverageGuides,
   createPendingCard,
+  isAnswerCoverage,
   isRoundClosingText,
   joinAnswerTurns,
   type AnswerCoverage,
@@ -23,7 +24,19 @@ import {
   type CoachRuntime,
 } from './coach-brief.js';
 import { clipChain, fallbackChain, type ChainMove } from './knowledge-chain.js';
-import { applyScoreToCard, assembleCoachScorePrompt, parseCoachScoreOutput } from './coach-score.js';
+import {
+  applyCoverageToCard,
+  applyProseToCard,
+  applyScoreToCard,
+  assembleCoachScorePrompt,
+  parseCoachScoreOutput,
+} from './coach-score.js';
+import {
+  applyReaskCap,
+  buildCoverageSettleInput,
+  countReasksOnThread,
+  type CoveragePort,
+} from './coverage-port.js';
 
 export const WATCH_COACH_TURN_TIMEOUT_MS = 20_000;
 
@@ -123,6 +136,7 @@ export const watchCoachTurnSession = async (
   clock: WatchCoachTurnClock = {},
   archive?: WorkspaceArchive,
   hooks?: ChainHooks,
+  coveragePort?: CoveragePort,
 ): Promise<WatchCoachTurnResponse> => {
   const record = examSessions.load(request.sessionId);
   if (record === undefined) {
@@ -139,23 +153,73 @@ export const watchCoachTurnSession = async (
   let scoreError: Extract<WatchCoachTurnResponse, { ok: false }> | undefined;
   let changed = false;
   let sealedGuide = false;
+  let jevAccelerated = record.jevAccelerated === true;
+  let openedAfterJev = false;
+  let pendingProse:
+    | {
+        readonly cardId: string;
+        readonly completePromise: Promise<string | null>;
+      }
+    | undefined;
+
+  const withAccel = <T extends object>(value: T): T & { jevAccelerated?: boolean } =>
+    jevAccelerated ? { ...value, jevAccelerated: true } : value;
 
   const persistAndReturn = async (): Promise<
-    | { readonly ok: true; readonly status: 'updated'; readonly deck: InterviewDeck }
+    | { readonly ok: true; readonly status: 'updated'; readonly deck: InterviewDeck; readonly jevAccelerated?: boolean }
     | Extract<WatchCoachTurnResponse, { ok: false }>
   > => {
-    saveExamRecord(examSessions, deck, lastQuestionText);
+    saveExamRecord(examSessions, deck, lastQuestionText, { jevAccelerated });
     const persisted = await persistDeck(archive, deck);
     if (!persisted.ok) {
       if (persisted.deck) {
         deck = persisted.deck;
-        saveExamRecord(examSessions, deck, lastQuestionText);
+        saveExamRecord(examSessions, deck, lastQuestionText, { jevAccelerated });
       }
-      return persisted;
+      return withAccel(persisted);
     }
     deck = persisted.deck;
-    saveExamRecord(examSessions, deck, lastQuestionText);
-    return { ok: true, status: 'updated', deck };
+    saveExamRecord(examSessions, deck, lastQuestionText, { jevAccelerated });
+    return withAccel({ ok: true as const, status: 'updated' as const, deck });
+  };
+
+  const rememberDeck = () => {
+    saveExamRecord(examSessions, deck, lastQuestionText, { jevAccelerated });
+  };
+
+  const applySettledCoverage = (pending: QuestionCard, coverage: AnswerCoverage, answer: string) => {
+    const beforeGuide = pending.guideCount ?? 0;
+    const next = applyCoverageToCard(pending, coverage, answer);
+    deck = replaceCard(deck, next, pending.id);
+    changed = true;
+    if (coverageGuides(coverage) && beforeGuide < 2 && beforeGuide + 1 >= 2) {
+      sealedGuide = true;
+    }
+    rememberDeck();
+  };
+
+  const fillPendingProse = async (): Promise<void> => {
+    if (pendingProse === undefined) {
+      return;
+    }
+    const job = pendingProse;
+    pendingProse = undefined;
+    const raw = await job.completePromise;
+    const card = deck.cards.find((item) => item.id === job.cardId);
+    if (card === undefined) {
+      return;
+    }
+    if (raw === null) {
+      scoreError = coachUnavailable(deck);
+      return;
+    }
+    const parsed = parseCoachScoreOutput(raw);
+    if (parsed === null) {
+      scoreError = coachUnavailable(deck);
+      return;
+    }
+    deck = replaceCard(deck, applyProseToCard(card, parsed));
+    changed = true;
   };
 
   const scorePendingIfAnswered = async (): Promise<void> => {
@@ -184,7 +248,21 @@ export const watchCoachTurnSession = async (
       ...(pending.layer !== undefined ? { layer: pending.layer } : {}),
       ...(pending.intent !== undefined ? { intent: pending.intent } : {}),
     });
-    const raw = await runtime.complete(system, user);
+    const completePromise = runtime.complete(system, user);
+    const reaskCount = countReasksOnThread(deck.cards, pending.id);
+    let decided: AnswerCoverage | 'unavailable' = 'unavailable';
+    if (coveragePort !== undefined) {
+      decided = await coveragePort.settle(
+        buildCoverageSettleInput(deck, pending, record.topic, record.difficulty, human.text),
+      );
+    }
+    if (isAnswerCoverage(decided)) {
+      applySettledCoverage(pending, applyReaskCap(decided, reaskCount), human.text);
+      jevAccelerated = true;
+      pendingProse = { cardId: pending.id, completePromise };
+      return;
+    }
+    const raw = await completePromise;
     if (raw === null) {
       scoreError = coachUnavailable(deck);
       return;
@@ -195,13 +273,15 @@ export const watchCoachTurnSession = async (
       return;
     }
     const beforeGuide = pending.guideCount ?? 0;
-    deck = replaceCard(deck, applyScoreToCard(pending, parsed, human.text), pending.id);
+    const coverage =
+      parsed.coverage === null ? null : applyReaskCap(parsed.coverage, reaskCount);
+    deck = replaceCard(deck, applyScoreToCard(pending, { ...parsed, coverage }, human.text), pending.id);
     changed = true;
-    if (parsed.coverage === null) {
+    if (coverage === null) {
       scoreError = coverageUnavailable(deck);
       return;
     }
-    if (coverageGuides(parsed.coverage) && beforeGuide < 2 && beforeGuide + 1 >= 2) {
+    if (coverageGuides(coverage) && beforeGuide < 2 && beforeGuide + 1 >= 2) {
       sealedGuide = true;
     }
   };
@@ -259,7 +339,26 @@ export const watchCoachTurnSession = async (
     return parsed;
   };
 
-  const acceptChain = (
+  const waitUntilExamIdle = async () => {
+    if (runtime.whenIdle === undefined) {
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        runtime.whenIdle(request.sessionId),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, WATCH_COACH_TURN_TIMEOUT_MS);
+        }),
+      ]);
+    } finally {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+    }
+  };
+
+  const acceptChain = async (
     parsed: NonNullable<ReturnType<typeof parseCoachBriefOutput>>,
     cardIds: readonly string[],
   ) => {
@@ -276,6 +375,7 @@ export const watchCoachTurnSession = async (
     });
     hooks?.memory.remember(request.sessionId, clipped);
     if (hooks?.port !== undefined) {
+      await waitUntilExamIdle();
       const mounted = hooks.port.install(request.sessionId, clipped.sectionText);
       if (!mounted.ok) {
         briefError = injectUnavailable(deck);
@@ -285,6 +385,7 @@ export const watchCoachTurnSession = async (
   };
 
   const appendNewCard = async (questionText: string): Promise<boolean> => {
+    await waitUntilExamIdle();
     const parsed = await briefQuestion(questionText);
     if (parsed === null) {
       return false;
@@ -295,7 +396,7 @@ export const watchCoachTurnSession = async (
       relation,
       previousId: previous?.id,
     });
-    const clipped = acceptChain(parsed, [...deck.cards.map((item) => item.id), id]);
+    const clipped = await acceptChain(parsed, [...deck.cards.map((item) => item.id), id]);
     const seed = await runtime.readLatestHuman(request.sessionId);
     const card = createPendingCard({
       id,
@@ -307,7 +408,36 @@ export const watchCoachTurnSession = async (
     });
     deck = appendCard(deck, card);
     changed = true;
+    rememberDeck();
     return true;
+  };
+
+  const openAfterJevCoverage = async (knownQuestion?: string) => {
+    const latest = deck.cards[deck.cards.length - 1];
+    const canOpen =
+      pendingProse !== undefined &&
+      latest?.status === 'scored' &&
+      lastPending(deck) === undefined &&
+      !coverageGuides(latest.coverage) &&
+      !sealedGuide;
+    if (canOpen) {
+      if (
+        knownQuestion !== undefined &&
+        !isRoundClosingText(knownQuestion) &&
+        knownQuestion !== lastQuestionText
+      ) {
+        openedAfterJev = (await appendNewCard(knownQuestion)) || openedAfterJev;
+      } else if (knownQuestion === undefined) {
+        const waited = await runtime.awaitNewQuestion(request.sessionId, lastQuestionText, {
+          timeoutMs: pollMs,
+          pollMs,
+        });
+        if (waited.ok && waited.status === 'ready' && !isRoundClosingText(waited.text)) {
+          openedAfterJev = (await appendNewCard(waited.text)) || openedAfterJev;
+        }
+      }
+    }
+    await fillPendingProse();
   };
 
   const publishIfWaitingForNextBrief = async () => {
@@ -324,14 +454,16 @@ export const watchCoachTurnSession = async (
   const holdGuideSpeech = async (questionText: string) => {
     lastQuestionText = questionText;
     changed = true;
+    await fillPendingProse();
     return persistAndReturn();
   };
 
   const briefNewQuestion = async (questionText: string) => {
     if (isRoundClosingText(questionText)) {
-      return { ok: true as const, status: 'unchanged' as const };
+      return withAccel({ ok: true as const, status: 'unchanged' as const });
     }
     await scorePendingIfAnswered();
+    await openAfterJevCoverage(questionText);
     if (scoreError !== undefined) {
       return undefined;
     }
@@ -342,29 +474,36 @@ export const watchCoachTurnSession = async (
     if (published !== undefined) {
       return published;
     }
+    if (openedAfterJev) {
+      return undefined;
+    }
     await appendNewCard(questionText);
     return undefined;
   };
 
   await scorePendingIfAnswered();
-  const scoredOnly = await publishIfWaitingForNextBrief();
-  if (scoredOnly !== undefined) {
-    return scoredOnly;
+  await openAfterJevCoverage();
+  if (!openedAfterJev) {
+    const scoredOnly = await publishIfWaitingForNextBrief();
+    if (scoredOnly !== undefined) {
+      return scoredOnly;
+    }
   }
 
-  if (request.force === true) {
+  if (!openedAfterJev) {
+    if (request.force === true) {
     const latest = await runtime.readLatestQuestion(request.sessionId);
     if (!latest.ok) {
-      return { ...latest, deck };
+      return withAccel({ ...latest, deck });
     }
     if (isRoundClosingText(latest.text)) {
-      return { ok: true, status: 'unchanged' };
+      return withAccel({ ok: true, status: 'unchanged' });
     }
     const pending = lastPending(deck);
     if (pending !== undefined && latest.text === pending.questionText) {
       const parsed = await briefQuestion(latest.text);
       if (parsed !== null) {
-        const clipped = acceptChain(
+        const clipped = await acceptChain(
           parsed,
           deck.cards.map((item) => item.id),
         );
@@ -402,7 +541,7 @@ export const watchCoachTurnSession = async (
         pollMs: clock.pollMs,
       });
       if (!waited.ok) {
-        return { ...waited, deck };
+        return withAccel({ ...waited, deck });
       }
       if (waited.status === 'ready') {
         const published = await briefNewQuestion(waited.text);
@@ -412,6 +551,10 @@ export const watchCoachTurnSession = async (
         break;
       }
       await scorePendingIfAnswered();
+      await openAfterJevCoverage();
+      if (openedAfterJev) {
+        break;
+      }
       const published = await publishIfWaitingForNextBrief();
       if (published !== undefined) {
         return published;
@@ -419,6 +562,7 @@ export const watchCoachTurnSession = async (
       if (Date.now() - started < Math.min(50, waitMs)) {
         break;
       }
+    }
     }
   }
 
@@ -428,19 +572,19 @@ export const watchCoachTurnSession = async (
       return persisted;
     }
     if (scoreError !== undefined && briefError === undefined) {
-      return { ...scoreError, deck: persisted.deck };
+      return withAccel({ ...scoreError, deck: persisted.deck });
     }
     if (briefError !== undefined) {
-      return { ...briefError, deck: persisted.deck };
+      return withAccel({ ...briefError, deck: persisted.deck });
     }
     return persisted;
   }
 
   if (scoreError !== undefined) {
-    return { ...scoreError, deck };
+    return withAccel({ ...scoreError, deck });
   }
   if (briefError !== undefined) {
-    return { ...briefError, deck };
+    return withAccel({ ...briefError, deck });
   }
-  return { ok: true, status: 'unchanged' };
+  return withAccel({ ok: true, status: 'unchanged' });
 };

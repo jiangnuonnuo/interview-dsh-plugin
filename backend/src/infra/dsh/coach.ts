@@ -398,4 +398,15 @@ export const createHostCoachRuntime = (
     }
     return trimmed;
   },
+  async whenIdle(sessionId) {
+    const agent = asCoachAgent(ctx.agents?.get(sessionId));
+    if (agent === undefined) {
+      return;
+    }
+    try {
+      await agent.whenIdle();
+    } catch {
+      return;
+    }
+  },
 });

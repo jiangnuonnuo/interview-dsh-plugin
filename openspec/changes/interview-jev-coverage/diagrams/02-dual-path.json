@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "mode": "data-flow",
+  "template_type": "data-flow",
+  "style": 1,
+  "quality_profile": "standard",
+  "width": 960,
+  "height": 560,
+  "title": "作答后的两条链路",
+  "subtitle": "上：config/jev.json 已开启且命中；下：未开启或失败回退",
+  "containers": [
+    { "id": "jev-path", "x": 48, "y": 100, "width": 864, "height": 140, "label": "已接入 Jev", "header_prefix": "A" },
+    { "id": "fallback-path", "x": 48, "y": 268, "width": 864, "height": 140, "label": "未接入或失败回退", "header_prefix": "B" }
+  ],
+  "nodes": [
+    { "id": "j-answer", "kind": "rect", "x": 72, "y": 148, "width": 140, "height": 56, "label": "考生作答", "fill": "#eff6ff", "stroke": "#bfdbfe", "flat": true },
+    { "id": "j-jev", "kind": "double_rect", "x": 284, "y": 148, "width": 160, "height": 56, "label": "Jev 五档" },
+    { "id": "j-card", "kind": "rect", "x": 516, "y": 148, "width": 160, "height": 56, "label": "代码开卡", "fill": "#f0fdf4", "stroke": "#bbf7d0", "flat": true },
+    { "id": "j-prose", "kind": "rect", "x": 748, "y": 148, "width": 140, "height": 56, "label": "LLM 评语", "fill": "#faf5ff", "stroke": "#e9d5ff", "flat": true },
+    { "id": "f-answer", "kind": "rect", "x": 72, "y": 316, "width": 140, "height": 56, "label": "考生作答", "fill": "#eff6ff", "stroke": "#bfdbfe", "flat": true },
+    { "id": "f-json", "kind": "double_rect", "x": 300, "y": 316, "width": 280, "height": 56, "label": "对照一次补全" },
+    { "id": "f-card", "kind": "rect", "x": 668, "y": 316, "width": 200, "height": 56, "label": "代码开卡", "fill": "#f0fdf4", "stroke": "#bbf7d0", "flat": true }
+  ],
+  "arrows": [
+    { "id": "j1", "source": "j-answer", "target": "j-jev", "source_port": "right", "target_port": "left", "flow": "control", "label": "定档" },
+    { "id": "j2", "source": "j-jev", "target": "j-card", "source_port": "right", "target_port": "left", "flow": "data", "label": "coverage" },
+    { "id": "j3", "source": "j-card", "target": "j-prose", "source_port": "right", "target_port": "left", "flow": "read", "label": "后写回" },
+    { "id": "f1", "source": "f-answer", "target": "f-json", "source_port": "right", "target_port": "left", "flow": "read", "label": "complete" },
+    { "id": "f2", "source": "f-json", "target": "f-card", "source_port": "right", "target_port": "left", "flow": "data", "label": "coverage" }
+  ],
+  "legend_orientation": "horizontal",
+  "legend_x": 48,
+  "legend_y": 440,
+  "legend": [
+    { "flow": "control", "label": "Jev 定档" },
+    { "flow": "data", "label": "开卡真源" },
+    { "flow": "read", "label": "生成评语" }
+  ],
+  "footer": "面试官在两条链路之外已经开口",
+  "footer_x": 48,
+  "footer_y": 484
+}
