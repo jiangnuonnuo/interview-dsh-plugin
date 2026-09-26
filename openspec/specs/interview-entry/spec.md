@@ -75,7 +75,7 @@
 - **THEN** 当前选中主题改回该预设名，开始前配置不再使用那段自定义文本
 
 ### Requirement: User can choose difficulty without changing the question bank
-系统 SHALL 让用户在初级、中级、高级三者中选择恰好一个难度。默认 MUST 为中级。难度在本 change 只作为入口配置保存；系统 MUST NOT 因难度切换而改用另一套预写死题。
+系统 SHALL 让用户在初级、中级、高级三者中选择恰好一个难度。默认 MUST 为中级。难度 MUST 作为知识链裁剪的输入（允许的考察层、起手层、同一知识点题数上限）。系统 MUST NOT 因难度切换而改用另一套预写死题。入口面板 MUST NOT 因此增加新控件。
 
 #### Scenario: Default difficulty
 - **WHEN** 入口面板首次打开且用户尚未改难度
@@ -83,7 +83,11 @@
 
 #### Scenario: Change difficulty
 - **WHEN** 用户点选「高级」
-- **THEN** 开始前配置中的难度为高级
+- **THEN** 开始前配置中的难度为高级，本场知识链按高级裁剪
+
+#### Scenario: Difficulty does not swap in a fixed paper
+- **WHEN** 用户把难度从初级改到高级后开始
+- **THEN** 题目仍由模型按该主题动态生成，系统 MUST NOT 改读一份预置高级题库
 
 ### Requirement: Entry MUST NOT collect duration or a folder
 入口面板 MUST NOT 提供时长或倒计时选择，MUST NOT 在开始前要求用户选择保存文件夹。
@@ -112,8 +116,12 @@
 - **THEN** 系统拒绝开始并在面板展示可见错误，不注入面试官
 
 ### Requirement: Packaged bundle declares Host and Client halves
-系统 SHALL 以 DSH 组合包交付：根 `package.json` 声明 `dsh.bundle` 与 `dsh.client`（`./client` 导出浏览器半侧），并提供 `cordis.patch.yml`。此声明是桌面端安装的前置，不替代上一节的实机打开验收。
+系统 SHALL 以 DSH 组合包交付：根 `package.json` 声明 `dsh.bundle` 与 `dsh.client`（`./client` 导出浏览器半侧），并提供 `cordis.patch.yml`。此声明是桌面端安装的前置，不替代入口打开的实机验收。组合包 MUST 能用 tarball 或钉死 Git commit 装进 Desktop 正在使用的 profile；仅本机 `dsh plugin add ./` 成功 MUST NOT 单独构成该 requirement。
 
 #### Scenario: Manifest is installable
 - **WHEN** 检查根包 `package.json` 与 `cordis.patch.yml`
 - **THEN** 存在 `dsh.bundle`、`dsh.client` 与 `./client` 导出，可供 `dsh plugin add` 使用
+
+#### Scenario: Foreign install spec is required
+- **WHEN** 用本仓库 tarball 或 `github:jiangnuonnuo/interview-dsh-plugin#<commit>` 把组合包装进 Desktop 正在使用的 profile（禁止 `add ./`）
+- **THEN** profile 的 `dsh.profile.bundles` 含本包，且之后在桌面端点「面试」仍打开入口面板

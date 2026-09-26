@@ -34,6 +34,10 @@
 - **WHEN** 面板已展示待答的 `Q1` 开卷要点，考生在宿主输入框提交回答
 - **THEN** 仍是 `Q1` 卡，出现对照与五维分数；面板内 MUST NOT 出现该回答气泡
 
+#### Scenario: Score follows the intent and layer
+- **WHEN** 该卡已有考察意图与考察层，候选人提交了作答
+- **THEN** 对照评的是该意图与该层，而不是另一套与意图无关的标准答
+
 #### Scenario: A later reply stacks on the same card
 - **WHEN** `Q1` 的对照是一点没答上或缺口大，考生又提交了一句补充
 - **THEN** `Q1` 的作答同时保留前后两句，对照与五维按两句合在一起的全文重算，甲板不新增卡片

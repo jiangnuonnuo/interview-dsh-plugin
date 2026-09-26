@@ -7,6 +7,10 @@
 - **WHEN** 开始成功
 - **THEN** 当前这条 DSH 对话中出现面试官消息：含本轮主题与难度说明，并包含恰好一个待答问题
 
+#### Scenario: Opening user bubble is a normal start line
+- **WHEN** 开始成功且插件已写下开场用户消息
+- **THEN** 该消息全文为「开始本场八股专项模拟面试。」，对话中看不到「请按人设」或知识链正文
+
 #### Scenario: Junior opens on a definition
 - **WHEN** 本场难度为初级且第一问已出现
 - **THEN** 这一问考察的是定义，而不是边界

@@ -82,11 +82,19 @@
 - **THEN** 面板展示可见失败，对话中不出现面试官，工作区不被错误写入 Desktop 进程目录
 
 ### Requirement: Interviewer asks the first question in the host conversation
-会话 A SHALL 使用 `interviewer-role-prompt.md` 的八股专项模板（填入本场主题与难度），开场说明本轮主题和难度后立刻问第一个问题，且每次只问一个问题。题目 MUST 由模型按主题与本场面试对话动态生成。系统 MUST NOT 用预写死题库驱动第一问。用户发言仍只通过 DSH 原对话输入框。
+会话 A SHALL 使用八股专项人设（填入本场主题与难度）。开场说明本轮主题和难度后立刻问第一个问题，且每次只问一个问题。第一问的起手层由难度决定：初级只问定义，中级问原理或场景，高级问原理中的取舍或边界。题目 MUST 由模型按主题、难度起手层与本场面试对话动态生成。系统 MUST NOT 用预写死题库驱动第一问。难度 MUST NOT 通过同一知识点的题数上限决定何时换题；允许层与引导尺度由 `interview-answer-guidance` 规定。用户发言仍只通过 DSH 原对话输入框。
 
 #### Scenario: First question appears in the current chat
 - **WHEN** 开始成功
 - **THEN** 当前这条 DSH 对话中出现面试官消息：含本轮主题与难度说明，并包含恰好一个待答问题
+
+#### Scenario: Opening user bubble is a normal start line
+- **WHEN** 开始成功且插件已写下开场用户消息
+- **THEN** 该消息全文为「开始本场八股专项模拟面试。」，对话中看不到「请按人设」或知识链正文
+
+#### Scenario: Junior opens on a definition
+- **WHEN** 本场难度为初级且第一问已出现
+- **THEN** 这一问考察的是定义，而不是边界
 
 #### Scenario: No homemade chat surface
 - **WHEN** 第一问已经出现
@@ -94,7 +102,11 @@
 
 #### Scenario: No dead question bank
 - **WHEN** 系统生成第一问
-- **THEN** 问题来自模型对本场主题与难度的生成，而不是插件内置固定题面列表的按序取出
+- **THEN** 问题来自模型对本场主题与难度起手层的生成，而不是插件内置固定题面列表的按序取出
+
+#### Scenario: Question count does not switch the topic
+- **WHEN** 同一知识点上的正式问尚未被对照判为下一正式问
+- **THEN** 系统不得仅因已经问过固定题数就换知识点
 
 ### Requirement: Coach panel shows the first question brief and standard-answer points
 面试进行中，右侧面板 SHALL 展示本场进行中状态、当前主题，以及第一张卡片 `Q1`。标准答要点 MUST 在题目一出现即可取得，MUST NOT 等到用户作答之后才生成。卡片流态 MUST 展示 `Q1` 编号、题干摘要入口与「查看完整内容」；完整题干与开卷要点 MUST 在详情态可见。`Q1` 在作答前 MUST 将对照与五维留空；面板 MUST NOT 由前端计算或判定分数。面板 MUST NOT 提供「提示一下」「跳过问题」的内容生成。进行中顶栏结构 MUST 对齐 `docs/product-design/interview-panel-flat-card-flow.png`：关闭、模拟面试、进行中标识、结束本场；刷新本题可用。
