@@ -43,6 +43,7 @@ const sessionErrorSchema = z.enum([
   'first_question_failed',
   'follow_up_failed',
   'persist_unavailable',
+  'evaluation_cancelled',
   'closing_failed',
   'chain_unavailable',
   'coverage_unavailable',
@@ -63,6 +64,22 @@ const briefRequestSchema = z.object({
   sessionId: z.string(),
   topic: z.string(),
   difficulty: difficultySchema,
+});
+
+const evaluationStageSchema = z.enum([
+  'idle',
+  'answer_received',
+  'coverage_ready',
+  'comparison_ready',
+  'brief_ready',
+  'failed',
+  'cancelled',
+]);
+
+const evaluationStateSchema = z.object({
+  stage: evaluationStageSchema,
+  version: z.number().int().nonnegative(),
+  error: z.string().optional(),
 });
 
 const cardSchema = z.object({
@@ -93,6 +110,7 @@ const cardSchema = z.object({
   coverage: z.enum(['miss', 'wide_gap', 'deepen', 'reask', 'next']).nullable().optional(),
   layer: z.enum(['define', 'why', 'scene', 'boundary']).optional(),
   intent: z.string().optional(),
+  evaluation: evaluationStateSchema.optional(),
 });
 
 const deckSchema = z.object({
@@ -103,6 +121,7 @@ const deckSchema = z.object({
   archiveDir: z.string(),
   cards: z.array(cardSchema),
   currentCardId: z.string(),
+  evaluation: evaluationStateSchema.extend({ cardId: z.string().optional() }).optional(),
 });
 
 const briefResultSchema = z.union([
@@ -128,11 +147,15 @@ const watchResultSchema = z.union([
     ok: z.literal(true),
     status: z.literal('updated'),
     deck: deckSchema,
+    stage: evaluationStageSchema.optional(),
+    generation: z.number().int().nonnegative().optional(),
     jevAccelerated: z.boolean().optional(),
   }),
   z.object({
     ok: z.literal(true),
     status: z.literal('unchanged'),
+    stage: evaluationStageSchema.optional(),
+    generation: z.number().int().nonnegative().optional(),
     jevAccelerated: z.boolean().optional(),
   }),
   z.object({
@@ -140,6 +163,8 @@ const watchResultSchema = z.union([
     code: sessionErrorSchema,
     message: z.string(),
     deck: deckSchema.optional(),
+    stage: evaluationStageSchema.optional(),
+    generation: z.number().int().nonnegative().optional(),
     jevAccelerated: z.boolean().optional(),
   }),
 ]);

@@ -34,12 +34,17 @@ import type { EntryConfigStore } from '../data/entry-config-store.js';
 import { createExamSessionStore, type ExamSessionStore } from '../data/exam-session-store.js';
 import { planJevSave, type JevConfigStore } from '../data/jev-config.js';
 import { loadDeckSession, type WorkspaceArchive } from '../data/workspace-archive.js';
-import { briefCoachSession, type ChainHooks, type CoachRuntime } from './coach-brief.js';
+import { briefCoachSession, type ChainHooks, type CoachBriefCache, type CoachRuntime } from './coach-brief.js';
 import type { CoveragePort } from './coverage-port.js';
 import { endRoundSession } from './end-round.js';
 import { assembleInterviewerPersona } from './interviewer-persona.js';
 import { createChainMemory } from './knowledge-chain.js';
 import { watchCoachTurnSession } from './watch-coach-turn.js';
+
+const WATCH_SNAPSHOT_DELAY_MS = 120;
+const WATCH_RESULT_TTL_MS = 5_000;
+
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 export interface InterviewerPersonaInstaller {
   install(sessionId: string, text: string): AttachInterviewerResponse;
@@ -106,6 +111,12 @@ export const createInterviewEntryService = (
   },
 ): InterviewEntryService => {
   const chainMemory = createChainMemory();
+  const watchFlights = new Map<string, Promise<WatchCoachTurnResponse>>();
+  const watchControllers = new Map<string, AbortController>();
+  const watchResults = new Map<string, { readonly expiresAt: number; readonly response: WatchCoachTurnResponse }>();
+  const cancelledSessions = new Set<string>();
+  const jevProbeCache = new Map<string, string>();
+  const briefCache: CoachBriefCache = new Map();
   const hooks: ChainHooks = {
     memory: chainMemory,
     ...(persona.installChain !== undefined && persona.clearChain !== undefined
@@ -181,14 +192,21 @@ export const createInterviewEntryService = (
       return planned;
     }
     if (planned.next.enabled) {
-      const reachable = extras.probeJev === undefined ? false : await extras.probeJev(planned.next.apiKey);
-      if (!reachable) {
-        return {
-          ok: false as const,
-          code: 'jev_unreachable' as const,
-          message: JEV_CONFIG_ERROR_MESSAGES.jev_unreachable,
-        };
+      const cacheKey = request.sessionId ?? 'workspace';
+      const signature = `${planned.next.enabled}:${planned.next.apiKey}`;
+      if (jevProbeCache.get(cacheKey) !== signature) {
+        const reachable = extras.probeJev === undefined ? false : await extras.probeJev(planned.next.apiKey);
+        if (!reachable) {
+          return {
+            ok: false as const,
+            code: 'jev_unreachable' as const,
+            message: JEV_CONFIG_ERROR_MESSAGES.jev_unreachable,
+          };
+        }
+        jevProbeCache.set(cacheKey, signature);
       }
+    } else {
+      jevProbeCache.delete(request.sessionId ?? 'workspace');
     }
     return extras.jevConfig.save(
       { enabled: planned.next.enabled, apiKey: planned.next.apiKey },
@@ -196,6 +214,8 @@ export const createInterviewEntryService = (
     );
   },
   attachInterviewer(request) {
+    cancelledSessions.delete(request.sessionId);
+    watchResults.delete(request.sessionId);
     const text = assembleInterviewerPersona({
       topic: request.topic,
       difficulty: request.difficulty,
@@ -203,16 +223,121 @@ export const createInterviewEntryService = (
     return persona.install(request.sessionId, text);
   },
   briefCoach(request) {
+    cancelledSessions.delete(request.sessionId);
+    watchResults.delete(request.sessionId);
     persona.clearRoundClose?.(request.sessionId);
     return briefCoachSession(coach, request, examSessions, archive, hooks);
   },
-  watchCoachTurn(request) {
-    return watchCoachTurnSession(coach, examSessions, request, {}, archive, hooks, extras?.coverage);
+  async watchCoachTurn(request) {
+    const running = watchFlights.get(request.sessionId);
+    if (running !== undefined) {
+      return Promise.race([
+        running,
+        wait(WATCH_SNAPSHOT_DELAY_MS).then(() => {
+          const record = examSessions.load(request.sessionId);
+          const evaluation = record?.deck.evaluation;
+          if (record === undefined || evaluation === undefined || evaluation.stage === 'idle') {
+            return {
+              ok: true as const,
+              status: 'unchanged' as const,
+              stage: evaluation?.stage,
+              generation: evaluation?.version,
+            };
+          }
+          return {
+            ok: true as const,
+            status: 'updated' as const,
+            deck: record.deck,
+            stage: evaluation.stage,
+            generation: evaluation.version,
+            ...(record.jevAccelerated === true ? { jevAccelerated: true } : {}),
+          };
+        }),
+      ]);
+    }
+    const cached = watchResults.get(request.sessionId);
+    if (cached !== undefined && cached.expiresAt > Date.now() && request.force !== true) {
+      const [question, human] = await Promise.all([
+        coach.readLatestQuestion(request.sessionId),
+        coach.readLatestHuman(request.sessionId),
+      ]);
+      const record = examSessions.load(request.sessionId);
+      const latestCard = record?.deck.cards[record.deck.cards.length - 1];
+      const knownAnswer = human.ok && latestCard !== undefined
+        ? latestCard.seedUserText === human.text || latestCard.answerTurns?.includes(human.text) === true
+        : false;
+      const knownQuestion = question.ok && record !== undefined ? question.text === record.lastQuestionText : false;
+      if (knownAnswer && knownQuestion) {
+        return cached.response;
+      }
+    } else if (cached !== undefined) {
+      watchResults.delete(request.sessionId);
+    }
+    const controller = new AbortController();
+    watchControllers.set(request.sessionId, controller);
+    const task = watchCoachTurnSession(
+      coach,
+      examSessions,
+      request,
+      {},
+      archive,
+      hooks,
+      extras?.coverage,
+      () => !cancelledSessions.has(request.sessionId),
+      watchControllers.get(request.sessionId)?.signal,
+      briefCache,
+    );
+    watchFlights.set(request.sessionId, task);
+    void task.then(
+      (response) => {
+        if (!cancelledSessions.has(request.sessionId)) {
+          watchResults.set(request.sessionId, { response, expiresAt: Date.now() + WATCH_RESULT_TTL_MS });
+        }
+        if (watchFlights.get(request.sessionId) === task) {
+          watchFlights.delete(request.sessionId);
+          watchControllers.delete(request.sessionId);
+        }
+      },
+      () => {
+        if (watchFlights.get(request.sessionId) === task) {
+          watchFlights.delete(request.sessionId);
+          watchControllers.delete(request.sessionId);
+        }
+      },
+    );
+    return Promise.race([
+      task,
+      wait(WATCH_SNAPSHOT_DELAY_MS).then(() => {
+        const record = examSessions.load(request.sessionId);
+        const evaluation = record?.deck.evaluation;
+        if (record === undefined || evaluation === undefined || evaluation.stage === 'idle') {
+          return {
+            ok: true as const,
+            status: 'unchanged' as const,
+            stage: evaluation?.stage,
+            generation: evaluation?.version,
+          };
+        }
+        return {
+          ok: true as const,
+          status: 'updated' as const,
+          deck: record.deck,
+          stage: evaluation.stage,
+          generation: evaluation.version,
+          ...(record.jevAccelerated === true ? { jevAccelerated: true } : {}),
+        };
+      }),
+    ]);
   },
   loadDeck(request) {
     return loadDeckSession(examSessions, request, archive);
   },
   endRound(request) {
+    cancelledSessions.add(request.sessionId);
+    watchResults.delete(request.sessionId);
+    watchControllers.get(request.sessionId)?.abort();
+    watchFlights.delete(request.sessionId);
+    watchControllers.delete(request.sessionId);
     return endRoundSession(coach, examSessions, request, archive);
   },
   armRoundClose(request) {

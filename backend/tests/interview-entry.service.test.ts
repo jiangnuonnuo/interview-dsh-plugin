@@ -2,10 +2,12 @@
  * @jest-environment node
  */
 
-import { JEV_CONFIG_ERROR_MESSAGES } from 'interview-dsh-shared';
+import { BAGUA_SCORE_DIMENSIONS, JEV_CONFIG_ERROR_MESSAGES } from 'interview-dsh-shared';
 import { createEntryConfigStore } from '../src/data/entry-config-store.js';
 import { emptyJevSecret, type JevConfigStore, type JevSecretConfig } from '../src/data/jev-config.js';
 import { createInterviewEntryService } from '../src/services/interview-entry.service.js';
+import { createExamSessionStore } from '../src/data/exam-session-store.js';
+import { createInterviewDeck, createPendingCard } from 'interview-dsh-shared';
 
 const memoryJev = (secret: JevSecretConfig, writes: unknown[] = []): JevConfigStore => ({
   async loadPublic() {
@@ -27,6 +29,202 @@ const mysqlRequest = {
 };
 
 describe('interview-entry.service', () => {
+  it('shares one in-flight watch task for concurrent callers', async () => {
+    let release: (value: string) => void = () => undefined;
+    const complete = jest.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const examSessions = createExamSessionStore();
+    examSessions.save({
+      sessionId: 'session-exam',
+      topic: 'MySQL 索引与优化',
+      difficulty: 'mid',
+      lastQuestionText: '请说明聚簇索引。',
+      deck: createInterviewDeck({
+        sessionId: 'session-exam',
+        topic: 'MySQL 索引与优化',
+        difficulty: 'mid',
+        cards: [
+          createPendingCard({
+            id: 'Q1',
+            questionText: '请说明聚簇索引。',
+            questionBrief: '聚簇',
+            keyPoints: ['叶子即行'],
+            seedUserText: '开始本场八股专项模拟面试。',
+          }),
+        ],
+        currentCardId: 'Q1',
+      }),
+    });
+    const service = createInterviewEntryService(
+      createEntryConfigStore(),
+      { install: () => ({ ok: true as const }) },
+      {
+        readLatestQuestion: async () => ({ ok: true as const, text: '请说明聚簇索引。' }),
+        readLatestHuman: async () => ({ ok: true as const, text: '叶子节点存整行。' }),
+        awaitNewQuestion: async () => ({ ok: true as const, status: 'unchanged' as const }),
+        complete,
+      },
+      examSessions,
+    );
+    const first = service.watchCoachTurn({ sessionId: 'session-exam' });
+    const second = service.watchCoachTurn({ sessionId: 'session-exam' });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(complete).toHaveBeenCalledTimes(1);
+    release(
+      JSON.stringify({
+        coverage: 'next',
+        covered: ['叶子即行'],
+        missed: [],
+        comment: '已覆盖',
+        scores: ['基础扎实度', '原理理解', '场景迁移', '深度边界', '表达清晰度'].map((dimension) => ({
+          dimension,
+          score: 3,
+        })),
+      }),
+    );
+    await Promise.all([first, second]);
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses a completed result briefly but starts a new version for a new guided answer', async () => {
+    let human = '不会。';
+    const complete = jest.fn(async () => JSON.stringify({
+      coverage: 'miss',
+      covered: [],
+      missed: ['叶子即行'],
+      comment: '继续引导',
+      scores: BAGUA_SCORE_DIMENSIONS.map((dimension) => ({ dimension, score: 1 })),
+    }));
+    const examSessions = createExamSessionStore();
+    examSessions.save({
+      sessionId: 'session-exam',
+      topic: 'MySQL',
+      difficulty: 'mid',
+      lastQuestionText: '请说明聚簇索引。',
+      deck: createInterviewDeck({
+        sessionId: 'session-exam',
+        topic: 'MySQL',
+        difficulty: 'mid',
+        cards: [createPendingCard({
+          id: 'Q1',
+          questionText: '请说明聚簇索引。',
+          questionBrief: '聚簇',
+          keyPoints: ['叶子即行'],
+          seedUserText: '开始本场八股专项模拟面试。',
+        })],
+        currentCardId: 'Q1',
+      }),
+    });
+    const service = createInterviewEntryService(
+      createEntryConfigStore(),
+      { install: () => ({ ok: true as const }) },
+      {
+        readLatestQuestion: async () => ({ ok: true as const, text: '请说明聚簇索引。' }),
+        readLatestHuman: async () => ({ ok: true as const, text: human }),
+        awaitNewQuestion: async () => ({ ok: true as const, status: 'unchanged' as const }),
+        complete,
+      },
+      examSessions,
+    );
+    await service.watchCoachTurn({ sessionId: 'session-exam' });
+    await service.watchCoachTurn({ sessionId: 'session-exam' });
+    expect(complete).toHaveBeenCalledTimes(1);
+    human = '还是不会。';
+    await service.watchCoachTurn({ sessionId: 'session-exam' });
+    expect(complete).toHaveBeenCalledTimes(2);
+  });
+
+  it('caches a completed brief for the same question fingerprint', async () => {
+    const complete = jest.fn(async () => JSON.stringify({
+      questionBrief: '聚簇索引',
+      keyPoints: ['叶子即行'],
+      pointName: '聚簇索引',
+      layer: 'define',
+      intent: '说明叶子节点内容',
+      moves: { deep: '继续', partial: '补充', miss: '提示' },
+    }));
+    const examSessions = createExamSessionStore();
+    examSessions.save({
+      sessionId: 'session-exam',
+      topic: 'MySQL',
+      difficulty: 'mid',
+      lastQuestionText: '请说明聚簇索引。',
+      deck: createInterviewDeck({
+        sessionId: 'session-exam',
+        topic: 'MySQL',
+        difficulty: 'mid',
+        cards: [createPendingCard({
+          id: 'Q1',
+          questionText: '请说明聚簇索引。',
+          questionBrief: '旧摘要',
+          keyPoints: ['旧要点'],
+        })],
+        currentCardId: 'Q1',
+      }),
+    });
+    const service = createInterviewEntryService(
+      createEntryConfigStore(),
+      { install: () => ({ ok: true as const }) },
+      {
+        readLatestQuestion: async () => ({ ok: true as const, text: '请说明聚簇索引。' }),
+        readLatestHuman: async () => ({ ok: true as const, text: '' }),
+        awaitNewQuestion: async () => ({ ok: true as const, status: 'unchanged' as const }),
+        complete,
+      },
+      examSessions,
+    );
+    await service.watchCoachTurn({ sessionId: 'session-exam', force: true });
+    await service.watchCoachTurn({ sessionId: 'session-exam' });
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
+
+  it('aborts the active evaluation when the round ends', async () => {
+    let release: (value: string) => void = () => undefined;
+    let completeCalls = 0;
+    const examSessions = createExamSessionStore();
+    examSessions.save({
+      sessionId: 'session-exam',
+      topic: 'MySQL',
+      difficulty: 'mid',
+      lastQuestionText: '题目',
+      deck: createInterviewDeck({
+        sessionId: 'session-exam',
+        topic: 'MySQL',
+        difficulty: 'mid',
+        cards: [createPendingCard({ id: 'Q1', questionText: '题目', questionBrief: '题目', keyPoints: [] })],
+        currentCardId: 'Q1',
+      }),
+    });
+    const service = createInterviewEntryService(
+      createEntryConfigStore(),
+      { install: () => ({ ok: true as const }) },
+      {
+        readLatestQuestion: async () => ({ ok: true as const, text: '题目' }),
+        readLatestHuman: async () => ({ ok: true as const, text: '回答' }),
+        awaitNewQuestion: async () => ({ ok: true as const, status: 'unchanged' as const }),
+        complete: async () => {
+          completeCalls += 1;
+          if (completeCalls > 1) return '继续复习基础知识。';
+          return new Promise((resolve) => { release = resolve; });
+        },
+      },
+      examSessions,
+    );
+    const watching = service.watchCoachTurn({ sessionId: 'session-exam' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const ended = await service.endRound({ sessionId: 'session-exam' });
+    expect(ended.ended).toBe(true);
+    release('{}');
+    const result = await watching;
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('evaluation_cancelled');
+    expect(examSessions.load('session-exam')?.ended).toBe(true);
+  });
+
   it('saves a preset topic and mid difficulty', () => {
     const service = createInterviewEntryService(createEntryConfigStore());
     const result = service.acceptEntryConfig(mysqlRequest);
@@ -141,6 +339,26 @@ describe('interview-entry.service', () => {
     const result = await service.saveJevConfig({ enabled: true, apiKey: 'sk-live' });
     expect(result).toEqual({ ok: true, enabled: true, apiKeySet: true });
     expect(writes).toEqual([{ enabled: true, apiKey: 'sk-live' }]);
+  });
+
+  it('reuses a successful Jev probe for the same configuration', async () => {
+    const writes: unknown[] = [];
+    const probeJev = jest.fn(async () => true);
+    const service = createInterviewEntryService(
+      createEntryConfigStore(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        jevConfig: memoryJev(emptyJevSecret(), writes),
+        probeJev,
+      },
+    );
+    await service.saveJevConfig({ enabled: true, apiKey: 'sk-live' });
+    await service.saveJevConfig({ enabled: true, apiKey: 'sk-live' });
+    expect(probeJev).toHaveBeenCalledTimes(1);
+    expect(writes).toHaveLength(2);
   });
 
   it('does not probe when turning Jev off', async () => {

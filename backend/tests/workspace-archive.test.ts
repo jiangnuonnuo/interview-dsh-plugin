@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 
-import { createInterviewDeck, createPendingCard, INTERVIEW_SESSION_ERROR_MESSAGES } from 'interview-dsh-shared';
+import { BAGUA_SCORE_DIMENSIONS, createInterviewDeck, createPendingCard, INTERVIEW_SESSION_ERROR_MESSAGES } from 'interview-dsh-shared';
 import { createExamSessionStore } from '../src/data/exam-session-store.js';
 import {
   archiveDirFor,
@@ -15,6 +15,7 @@ import {
 import { createFsWorkspaceArchive } from '../src/infra/dsh/workspace-fs.js';
 import { briefCoachSession } from '../src/services/coach-brief.js';
 import { stubCoach } from './coach-stub.js';
+import { watchCoachTurnSession } from '../src/services/watch-coach-turn.js';
 
 const q1 = createPendingCard({
   id: 'Q1',
@@ -183,6 +184,58 @@ describe('workspace archive', () => {
     const reader = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' });
     const loaded = await reader.readDeck('session-exam');
     expect(loaded?.cards.map((card) => card.id)).toEqual(['Q1', 'Q1.1']);
+  });
+
+  it('resumes an incomplete coverage stage after process restart', async () => {
+    const { fs } = createFakeFs();
+    const writer = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' });
+    const stagedCard = {
+      ...q1,
+      status: 'scored' as const,
+      answer: '叶子节点存整行',
+      answerTurns: ['叶子节点存整行'],
+      coverage: 'deepen' as const,
+      evaluation: { stage: 'coverage_ready' as const, version: 1 },
+    };
+    const stagedDeck = createInterviewDeck({
+      sessionId: 'session-exam',
+      topic: 'MySQL 索引与优化',
+      difficulty: 'mid',
+      cards: [stagedCard],
+      currentCardId: 'Q1',
+    });
+    await writer.writeDeck(stagedDeck);
+
+    const reader = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' });
+    const sessions = createExamSessionStore();
+    const loaded = await loadDeckSession(sessions, { sessionId: 'session-exam' }, reader);
+    expect(loaded.ok).toBe(true);
+    const settle = jest.fn(async () => 'next' as const);
+    const result = await watchCoachTurnSession(
+      stubCoach({
+        readLatestHuman: async () => ({ ok: true, text: '叶子节点存整行' }),
+        complete: async () => JSON.stringify({
+          coverage: 'miss',
+          covered: ['叶子即行'],
+          missed: [],
+          comment: '恢复后补齐',
+          scores: BAGUA_SCORE_DIMENSIONS.map((dimension) => ({ dimension, score: 4 })),
+        }),
+      }),
+      sessions,
+      { sessionId: 'session-exam' },
+      {},
+      reader,
+      undefined,
+      { settle },
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok && result.status === 'updated') {
+      expect(result.deck.cards[0]?.comparison?.comment).toBe('恢复后补齐');
+      expect(result.deck.cards[0]?.answerTurns).toEqual(['叶子节点存整行']);
+      expect(result.deck.cards[0]?.evaluation?.stage).toBe('comparison_ready');
+    }
+    expect(settle).not.toHaveBeenCalled();
   });
 
   it('returns persist_unavailable without fs, cwd, or a legal session id', async () => {

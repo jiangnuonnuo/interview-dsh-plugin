@@ -302,6 +302,10 @@ export const InProgressPanel = ({
     refreshing,
   });
   const showFlowGenerating = next === undefined && (showNextGenerating || showRefreshGenerating);
+  const evaluationStage = card.evaluation?.stage ?? deck.evaluation?.stage;
+  const evaluationError = card.evaluation?.error ?? deck.evaluation?.error;
+  const comparisonGenerating =
+    evaluationStage === 'answer_received' || evaluationStage === 'coverage_ready';
 
   const openDetail = () => {
     setViewMode('detail');
@@ -480,9 +484,9 @@ export const InProgressPanel = ({
         ) : null}
       </div>
 
-      {error ? (
+      {error ?? evaluationError ? (
         <p className={styles.error} role="alert">
-          {error}
+          {error ?? evaluationError}
         </p>
       ) : null}
 
@@ -616,7 +620,7 @@ export const InProgressPanel = ({
             <FoldBlock title="对照" icon={<IconDoc />} blocked={justSwiped}>
               {card.comparison === null ? (
                 <p className={styles.brief} data-testid="card-comparison">
-                  待对照
+                  {comparisonGenerating ? '正在生成对照…' : '待对照'}
                 </p>
               ) : (
                 <div data-testid="card-comparison">

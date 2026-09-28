@@ -278,6 +278,33 @@ describe('InProgressPanel', () => {
     expect(screen.getByTestId('card-flow').contains(screen.getByTestId('generating-next'))).toBe(true);
   });
 
+  it('shows a failed stage beside the preserved card', () => {
+    const failedDeck = createInterviewDeck({
+      sessionId: 'session-exam',
+      topic: 'MySQL 索引与优化',
+      difficulty: 'mid',
+      cards: [{
+        ...pending,
+        answer: '叶子节点存行。',
+        evaluation: { stage: 'failed' as const, version: 1, error: '对照生成失败' },
+      }],
+      currentCardId: 'Q1',
+    });
+    render(<InProgressPanel deck={failedDeck} />);
+    expect(screen.getByRole('alert').textContent).toContain('对照生成失败');
+    expect(screen.getByText('聚簇索引和二级索引的区别')).toBeDefined();
+  });
+
+  it.each([
+    ['本题结果生成已取消，已保留此前可见的卡片内容。'],
+    ['无法写入工作区练习记录：当前没有可用的工作区目录或文件系统。'],
+  ])('keeps the card visible with an evaluation error: %s', (message) => {
+    render(<InProgressPanel deck={pendingDeck} error={message} />);
+    expect(screen.getByRole('alert').textContent).toContain(message);
+    expect(screen.getByTestId('current-card')).toBeDefined();
+    expect(screen.getByText('聚簇索引和二级索引的区别')).toBeDefined();
+  });
+
   it('opens scored-card detail with key points while next is generating', () => {
     render(<InProgressPanel deck={scoredOnlyDeck} />);
     expect(screen.getByTestId('generating-next').textContent).toMatch(/正在准备下一题/);

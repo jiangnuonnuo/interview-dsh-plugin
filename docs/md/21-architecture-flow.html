@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:">
+  <title>架构流转图 · DSH 插件的一次运行</title>
+  <style>
+    :root { color-scheme: dark; --page:#0f0f1a; --panel:#0f172a; --border:#334155; --text:#e2e8f0; --muted:#94a3b8; --accent:#a855f7; }
+    html[data-theme="light"] { color-scheme:light; --page:#f8fafc; --panel:#fff; --border:#cbd5e1; --text:#0f172a; --muted:#475569; --accent:#7c3aed; }
+    * { box-sizing:border-box; }
+    html,body { width:100%; height:100%; margin:0; overflow:hidden; background:linear-gradient(135deg,var(--page),#1a1a2e); color:var(--text); font-family:'SF Mono','Fira Code',ui-monospace,monospace; }
+    body { display:grid; grid-template-rows:auto 1fr; }
+    .toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px 14px; background:color-mix(in srgb,var(--panel) 92%,transparent); border-bottom:1px solid var(--border); z-index:2; }
+    .title { margin-right:auto; font-size:13px; font-weight:700; }
+    button,select { min-height:34px; padding:6px 10px; color:var(--text); background:var(--panel); border:1px solid var(--border); border-radius:8px; font:inherit; cursor:pointer; }
+    button:hover,button:focus-visible,select:focus-visible { border-color:var(--accent); outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent); outline-offset:1px; }
+    #stage { position:relative; overflow:hidden; touch-action:none; cursor:grab; }
+    #stage.dragging { cursor:grabbing; }
+    #canvas { width:100%; height:100%; display:grid; place-items:center; transform-origin:0 0; will-change:transform; }
+    #canvas svg { max-width:calc(100vw - 40px); max-height:calc(100vh - 92px); width:auto; height:auto; filter:drop-shadow(0 22px 60px rgba(0,0,0,.28)); user-select:none; }
+    #status { min-width:76px; color:var(--muted); font-size:12px; text-align:center; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    @media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto!important; transition:none!important; } }
+  </style>
+</head>
+<body>
+  <header class="toolbar" aria-label="Diagram controls">
+    <span class="title">架构流转图 · DSH 插件的一次运行</span>
+    <button type="button" data-action="zoom-out" aria-label="Zoom out">−</button>
+    <button type="button" data-action="reset" aria-label="Reset view">Reset</button>
+    <button type="button" data-action="zoom-in" aria-label="Zoom in">+</button>
+    <span id="status" aria-live="polite">100%</span>
+    <button type="button" data-action="theme" aria-label="Toggle theme">Theme</button>
+    <button type="button" data-action="copy" aria-label="Copy SVG source">Copy SVG</button>
+    <select id="scale" aria-label="Raster export scale"><option value="1">1×</option><option value="2" selected>2×</option><option value="3">3×</option><option value="4">4×</option></select>
+    <select id="format" aria-label="Export format"><option>SVG</option><option>PNG</option><option>JPEG</option><option>WebP</option></select>
+    <button type="button" data-action="download">Export</button>
+  </header>
+  <main id="stage" tabindex="0" aria-label="Interactive diagram. Drag to pan; use plus and minus to zoom.">
+    <div id="canvas"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1480 760" width="1480" height="760" data-generator="fireworks-tech-graph" data-schema-version="1" data-text-metrics="heuristic-v1" data-style-id="1" data-visual-theme="Flat Icon" data-diagram-type="flowchart" data-motion-scene="" data-semantic-profile="generic" data-semantic-valid="true" data-quality-profile="showcase" data-max-bends-per-edge="2" data-max-total-bends="8" data-max-route-stretch="1.35" data-max-bridged-crossings="0" data-min-node-gap="40.0" data-min-container-gutter="20.0" data-min-label-clearance="4.0" data-min-segment-length="16.0" role="img" focusable="false">
+  <defs>
+    <marker id="arrowA" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#7c3aed" />
+    </marker>
+    <marker id="arrowB" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#10b981" />
+    </marker>
+    <marker id="arrowC" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2563eb" />
+    </marker>
+    <marker id="arrowE" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#f97316" />
+    </marker>
+    <marker id="arrowF" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#7c3aed" />
+    </marker>
+    <marker id="arrowG" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#ef4444" />
+    </marker>
+    <marker id="arrowH" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6b7280" />
+    </marker>
+    <filter id="shadowSoft" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#0f172a" flood-opacity="0.12" />
+    </filter>
+    <filter id="shadowGlass" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#020617" flood-opacity="0.28" />
+    </filter>
+    <style>
+    text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }
+    .title { font-size: 30px; font-weight: 700; fill: #111827; }
+    .subtitle { font-size: 14px; font-weight: 500; fill: #6b7280; }
+    .section { font-size: 13px; font-weight: 700; fill: #2563eb; letter-spacing: 1.4px; }
+    .section-sub { font-size: 12px; font-weight: 500; fill: #94a3b8; }
+    .node-title { font-weight: 700; fill: #111827; }
+    .node-sub { font-size: 12px; font-weight: 500; fill: #6b7280; }
+    .node-type { font-size: 12px; font-weight: 700; fill: #9ca3af; letter-spacing: 0.08em; }
+    .arrow-label { font-size: 12px; font-weight: 600; fill: #6b7280; }
+    .legend { font-size: 12px; font-weight: 500; fill: #6b7280; }
+    .footnote { font-size: 12px; font-weight: 500; fill: #94a3b8; }
+    .metric-label { font-size: 8.5px; font-weight: 700; fill: #94a3b8; text-transform: uppercase; }
+    .metric-value { font-size: 9.5px; font-weight: 700; fill: #111827; }
+    </style>
+  </defs>
+  <rect data-graph-role="background" width="1480.0" height="760.0" fill="#ffffff" />
+  <text x="740.0" y="56" text-anchor="middle" class="title">架构流转图 · DSH 插件的一次运行</text>
+  <text x="740.0" y="82" text-anchor="middle" class="subtitle">先由 Cordis 装配 Host 与 Client，再由 Typert 串起面板、宿主会话、Agent 与工作区</text>
+  <g id="assembly" data-graph-role="container" data-container-id="assembly" data-semantic-role="boundary" data-graph-bounds="36,96,1444,272">
+  <rect data-graph-role="container" x="36.0" y="96.0" width="1408.0" height="176.0" rx="16.0" fill="none" stroke="#d1d5db" stroke-width="1.4" stroke-dasharray="6 5" />
+  <text x="54.0" y="120.0" class="section">装配阶段</text>
+    <rect id="assembly-header" data-graph-role="reserved" data-reserved-kind="container-header" x="44" y="102" width="82" height="30" fill="none" stroke="none" />
+  </g>
+  <g id="runtime" data-graph-role="container" data-container-id="runtime" data-semantic-role="boundary" data-graph-bounds="36,340,1444,560">
+  <rect data-graph-role="container" x="36.0" y="340.0" width="1408.0" height="220.0" rx="16.0" fill="none" stroke="#d1d5db" stroke-width="1.4" stroke-dasharray="6 5" />
+  <text x="54.0" y="364.0" class="section">运行时阶段</text>
+    <rect id="runtime-header" data-graph-role="reserved" data-reserved-kind="container-header" x="44" y="346" width="95" height="30" fill="none" stroke="none" />
+  </g>
+  <path id="read-manifest" data-graph-role="edge" data-edge-id="read-manifest" data-source="manifest" data-target="host-load" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 294,192 L 414,192" fill="none" stroke="#7c3aed" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)" />
+  <path id="host-provide" data-graph-role="edge" data-edge-id="host-provide" data-source="host-load" data-target="provide" data-edge-kind="flow" data-topic-id="" data-flow="write" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 644,192 L 764,192" fill="none" stroke="#10b981" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowB)" />
+  <path id="load-client" data-graph-role="edge" data-edge-id="load-client" data-source="provide" data-target="client-load" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 994,192 L 1114,192" fill="none" stroke="#7c3aed" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)" />
+  <path id="open-panel" data-graph-role="edge" data-edge-id="open-panel" data-source="client-load" data-target="panel" data-edge-kind="flow" data-topic-id="" data-flow="feedback" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="2" data-route-stretch="1.0" data-bridges="" d="M 1229,228 L 1229,252 L 179,252 L 179,400" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowG)" />
+  <path id="call-port" data-graph-role="edge" data-edge-id="call-port" data-source="panel" data-target="session" data-edge-kind="flow" data-topic-id="" data-flow="read" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 294,436 L 414,436" fill="none" stroke="#2563eb" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowC)" />
+  <path id="drive-agent" data-graph-role="edge" data-edge-id="drive-agent" data-source="session" data-target="agent" data-edge-kind="flow" data-topic-id="" data-flow="write" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 644,436 L 764,436" fill="none" stroke="#10b981" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowB)" />
+  <path id="coach-result" data-graph-role="edge" data-edge-id="coach-result" data-source="agent" data-target="coach" data-edge-kind="flow" data-topic-id="" data-flow="read" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 994,436 L 1114,436" fill="none" stroke="#2563eb" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowC)" />
+  <path id="next-round" data-graph-role="edge" data-edge-id="next-round" data-source="coach" data-target="session" data-edge-kind="flow" data-topic-id="" data-flow="feedback" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="2" data-route-stretch="1.069" data-bridges="" d="M 1229,472 L 1229,496 L 529,496 L 529,472" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowG)" />
+  <g id="node-manifest" data-graph-role="node" data-node-id="manifest" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="64,156,294,228">
+  <rect x="64.0" y="156.0" width="230.0" height="72.0" rx="10.0" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8" />
+  <text x="179.0" y="192.0" text-anchor="middle" class="node-title" font-size="18.0">读取插件清单</text>
+  <text x="179.0" y="214.0" text-anchor="middle" class="node-sub">package + patch</text>
+  </g>
+  <g id="node-host-load" data-graph-role="node" data-node-id="host-load" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="414,156,644,228">
+  <rect x="414.0" y="156.0" width="230.0" height="72.0" rx="10.0" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.8" />
+  <text x="529.0" y="192.0" text-anchor="middle" class="node-title" font-size="18.0">加载 Host</text>
+  <text x="529.0" y="214.0" text-anchor="middle" class="node-sub">inject + apply</text>
+  </g>
+  <g id="node-provide" data-graph-role="node" data-node-id="provide" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="764,156,994,228">
+  <rect x="764.0" y="156.0" width="230.0" height="72.0" rx="10.0" fill="#f0fdfa" stroke="#0f766e" stroke-width="1.8" />
+  <text x="879.0" y="192.0" text-anchor="middle" class="node-title" font-size="18.0">提供业务端口</text>
+  <text x="879.0" y="214.0" text-anchor="middle" class="node-sub">interviewEntry</text>
+  </g>
+  <g id="node-client-load" data-graph-role="node" data-node-id="client-load" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="1114,156,1344,228">
+  <rect x="1114.0" y="156.0" width="230.0" height="72.0" rx="10.0" fill="#fff7ed" stroke="#ea580c" stroke-width="1.8" />
+  <text x="1229.0" y="192.0" text-anchor="middle" class="node-title" font-size="18.0">加载 Client</text>
+  <text x="1229.0" y="214.0" text-anchor="middle" class="node-sub">slots + remote</text>
+  </g>
+  <g id="node-panel" data-graph-role="node" data-node-id="panel" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="64,400,294,472">
+  <rect x="64.0" y="400.0" width="230.0" height="72.0" rx="10.0" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8" />
+  <text x="179.0" y="436.0" text-anchor="middle" class="node-title" font-size="18.0">面板发起调用</text>
+  <text x="179.0" y="458.0" text-anchor="middle" class="node-sub">remote.interviewEntry</text>
+  </g>
+  <g id="node-session" data-graph-role="node" data-node-id="session" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="414,400,644,472">
+  <rect x="414.0" y="400.0" width="230.0" height="72.0" rx="10.0" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.8" />
+  <text x="529.0" y="436.0" text-anchor="middle" class="node-title" font-size="18.0">创建或复用会话</text>
+  <text x="529.0" y="458.0" text-anchor="middle" class="node-sub">sessions + workspace</text>
+  </g>
+  <g id="node-agent" data-graph-role="node" data-node-id="agent" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="764,400,994,472">
+  <rect x="764.0" y="400.0" width="230.0" height="72.0" rx="10.0" fill="#fff7ed" stroke="#ea580c" stroke-width="1.8" />
+  <text x="879.0" y="436.0" text-anchor="middle" class="node-title" font-size="18.0">Agent 生成对话</text>
+  <text x="879.0" y="458.0" text-anchor="middle" class="node-sub">systemPrompt + prompt</text>
+  </g>
+  <g id="node-coach" data-graph-role="node" data-node-id="coach" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="1114,400,1344,472">
+  <rect x="1114.0" y="400.0" width="230.0" height="72.0" rx="10.0" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.8" />
+  <text x="1229.0" y="436.0" text-anchor="middle" class="node-title" font-size="18.0">评估与落盘</text>
+  <text x="1229.0" y="458.0" text-anchor="middle" class="node-sub">llm + Typert + fs</text>
+  </g>
+  <g id="read-manifest-label" data-graph-role="label" data-owner="read-manifest" data-graph-bounds="335,161,373,181">
+  <rect x="335.0" y="161.0" width="38.0" height="20" rx="6" fill="#ffffff" opacity="0.94" />
+  <text x="354.0" y="175.0" text-anchor="middle" class="arrow-label">装配</text>
+  </g>
+  <g id="host-provide-label" data-graph-role="label" data-owner="host-provide" data-graph-bounds="674.2,161,733.8,181">
+  <rect x="674.2" y="161.0" width="59.599999999999994" height="20" rx="6" fill="#ffffff" opacity="0.94" />
+  <text x="704.0" y="175.0" text-anchor="middle" class="arrow-label">provide</text>
+  </g>
+  <g id="load-client-label" data-graph-role="label" data-owner="load-client" data-graph-bounds="1017,161,1091,181">
+  <rect x="1017.0" y="161.0" width="74.0" height="20" rx="6" fill="#ffffff" opacity="0.94" />
+  <text x="1054.0" y="175.0" text-anchor="middle" class="arrow-label">加载网页端</text>
+  </g>
+  <g id="open-panel-label" data-graph-role="label" data-owner="open-panel" data-graph-bounds="673,221,735,241">
+  <rect x="673.0" y="221.0" width="62.0" height="20" rx="6" fill="#ffffff" opacity="0.94" />
+  <text x="704.0" y="235.0" text-anchor="middle" class="arrow-label">入口可见</text>
+  </g>
+  <g id="call-port-label" data-graph-role="label" data-owner="call-port" data-graph-bounds="326.12,405,381.88,425">
+  <rect x="326.12" y="405.0" width="55.76" height="20" rx="6" fill="#ffffff" opacity="0.94" />
+  <text x="354.0" y="419.0" text-anchor="middle" class="arrow-label">Typert</text>
+  </g>
+  <g id="drive-agent-label" data-graph-role="label" data-owner="drive-agent" data-graph-bounds="659.2,405,748.8,425">
+  <rect x="659.2" y="405.0" width="89.6" height="20" rx="6" fill="#ffffff" opacity="0.94" />
+  <text x="704.0" y="419.0" text-anchor="middle" class="arrow-label">会话 + 系统段</text>
+  </g>
+  <g id="coach-result-label" data-graph-role="label" data-owner="coach-result" data-graph-bounds="1017,405,1091,425">
+  <rect x="1017.0" y="405.0" width="74.0" height="20" rx="6" fill="#ffffff" opacity="0.94" />
+  <text x="1054.0" y="419.0" text-anchor="middle" class="arrow-label">日志与评估</text>
+  </g>
+  <g id="next-round-label" data-graph-role="label" data-owner="next-round" data-graph-bounds="816.2,483,941.8,503">
+  <rect x="816.2" y="483.0" width="125.60000000000001" height="20" rx="6" fill="#ffffff" opacity="0.94" />
+  <text x="879.0" y="497.0" text-anchor="middle" class="arrow-label">结果回面板 / 下一轮</text>
+  </g>
+  <g id="legend" data-graph-role="legend">
+    <rect id="legend-zone" data-graph-role="reserved" data-reserved-kind="legend" x="38" y="636" width="598" height="46" rx="10" fill="none" stroke="none" />
+    <line data-graph-role="decoration" x1="48.0" y1="650.0" x2="78.0" y2="650.0" stroke="#7c3aed" stroke-width="2.4" marker-end="url(#arrowA)" />
+    <text data-graph-role="decoration" x="88.0" y="654.0" class="legend">生命周期与控制</text>
+    <line data-graph-role="decoration" x1="200.0" y1="650.0" x2="230.0" y2="650.0" stroke="#2563eb" stroke-width="2.4" marker-end="url(#arrowC)" />
+    <text data-graph-role="decoration" x="240.0" y="654.0" class="legend">远程调用与读取</text>
+    <line data-graph-role="decoration" x1="352.0" y1="650.0" x2="382.0" y2="650.0" stroke="#10b981" stroke-width="2.4" marker-end="url(#arrowB)" />
+    <text data-graph-role="decoration" x="392.0" y="654.0" class="legend">系统段与落盘</text>
+    <line data-graph-role="decoration" x1="492.0" y1="650.0" x2="522.0" y2="650.0" stroke="#ef4444" stroke-width="2.4" marker-end="url(#arrowG)" />
+    <text data-graph-role="decoration" x="532.0" y="654.0" class="legend">宿主回复与结果</text>
+  </g>
+  <g id="footer" data-graph-role="reserved" data-graph-bounds="48,696,608,712">
+  <text x="48.0" y="708.0" class="footnote">Client 只负责界面与会话控制；Host 负责领域编排与 DSH 适配。追问沿宿主会话继续，结束时由 Host 写入 qa.md 与 summary.md。</text>
+  </g>
+</svg></div>
+    <p class="sr-only">Keyboard shortcuts: plus and minus zoom, zero resets, T toggles theme, S exports.</p>
+  </main>
+  <script>
+  (() => {
+    'use strict';
+    const metadata = {"slug": "dsh-plugin-architecture-flow"};
+    const stage = document.getElementById('stage');
+    const canvas = document.getElementById('canvas');
+    const svg = canvas.querySelector('svg');
+    const status = document.getElementById('status');
+    const scaleSelect = document.getElementById('scale');
+    const formatSelect = document.getElementById('format');
+    let view = { x:0, y:0, scale:1 };
+    let drag = null;
+    const clamp = value => Math.max(.2, Math.min(8, value));
+    const render = () => {
+      canvas.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.scale})`;
+      status.textContent = `${Math.round(view.scale * 100)}%`;
+    };
+    const zoom = (factor, originX=stage.clientWidth/2, originY=stage.clientHeight/2) => {
+      const next = clamp(view.scale * factor);
+      const ratio = next / view.scale;
+      view.x = originX - (originX - view.x) * ratio;
+      view.y = originY - (originY - view.y) * ratio;
+      view.scale = next; render();
+    };
+    const reset = () => { view = {x:0,y:0,scale:1}; render(); };
+    stage.addEventListener('wheel', event => { event.preventDefault(); const rect=stage.getBoundingClientRect(); zoom(event.deltaY < 0 ? 1.12 : .89, event.clientX-rect.left, event.clientY-rect.top); }, {passive:false});
+    stage.addEventListener('pointerdown', event => { drag={id:event.pointerId,x:event.clientX,y:event.clientY,vx:view.x,vy:view.y}; stage.setPointerCapture(event.pointerId); stage.classList.add('dragging'); });
+    stage.addEventListener('pointermove', event => { if(!drag||drag.id!==event.pointerId)return; view.x=drag.vx+event.clientX-drag.x; view.y=drag.vy+event.clientY-drag.y; render(); });
+    const endDrag = () => { drag=null; stage.classList.remove('dragging'); };
+    stage.addEventListener('pointerup', endDrag); stage.addEventListener('pointercancel', endDrag);
+    const source = () => new XMLSerializer().serializeToString(svg);
+    const saveBlob = (blob, extension) => { const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${(metadata.slug||'fireworks-tech-graph')}.${extension}`; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); };
+    const copySource = async () => {
+      const value=source();
+      try { await navigator.clipboard.writeText(value); status.textContent='Copied'; return; } catch {}
+      const area=document.createElement('textarea'); area.value=value; area.setAttribute('readonly',''); area.style.position='fixed'; area.style.opacity='0'; document.body.appendChild(area); area.select();
+      status.textContent=document.execCommand('copy')?'Copied':'Copy failed'; area.remove();
+    };
+    const exportDiagram = async () => {
+      const format = formatSelect.value.toLowerCase();
+      if(format==='svg') { saveBlob(new Blob([source()],{type:'image/svg+xml;charset=utf-8'}),'svg'); return; }
+      const scale = Math.max(1,Math.min(4,Number(scaleSelect.value)||2));
+      const box = svg.viewBox.baseVal; const width=box.width||svg.clientWidth; const height=box.height||svg.clientHeight;
+      const image = new Image(); const url=URL.createObjectURL(new Blob([source()],{type:'image/svg+xml'}));
+      await new Promise((resolve,reject)=>{ image.onload=resolve; image.onerror=reject; image.src=url; });
+      const raster=document.createElement('canvas'); raster.width=Math.round(width*scale); raster.height=Math.round(height*scale);
+      const ctx=raster.getContext('2d'); if(format==='jpeg'){ctx.fillStyle='#ffffff';ctx.fillRect(0,0,raster.width,raster.height);} ctx.drawImage(image,0,0,raster.width,raster.height); URL.revokeObjectURL(url);
+      const mime=format==='jpeg'?'image/jpeg':format==='webp'?'image/webp':'image/png';
+      const blob=await new Promise(resolve=>raster.toBlob(resolve,mime,.94)); if(blob) saveBlob(blob,format==='jpeg'?'jpg':format);
+    };
+    document.querySelector('.toolbar').addEventListener('click', async event => {
+      const action=event.target.closest('[data-action]')?.dataset.action; if(!action)return;
+      if(action==='zoom-in')zoom(1.2); else if(action==='zoom-out')zoom(.83); else if(action==='reset')reset();
+      else if(action==='theme')document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark';
+      else if(action==='download')await exportDiagram();
+      else if(action==='copy') await copySource();
+    });
+    document.addEventListener('keydown', event => {
+      if(event.target.matches('select'))return;
+      if(event.key==='+'||event.key==='=')zoom(1.2); else if(event.key==='-')zoom(.83); else if(event.key==='0'||event.key.toLowerCase()==='r')reset();
+      else if(event.key.toLowerCase()==='t')document.querySelector('[data-action=theme]').click(); else if(event.key.toLowerCase()==='s'){event.preventDefault();exportDiagram();}
+    });
+    render();
+  })();
+  </script>
+</body>
+</html>

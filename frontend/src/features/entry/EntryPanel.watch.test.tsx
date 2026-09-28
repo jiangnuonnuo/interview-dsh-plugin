@@ -214,6 +214,43 @@ describe('EntryPanel watchCoachTurn', () => {
     expect(screen.getByRole('heading', { name: '标准答要点' })).toBeDefined();
   });
 
+  it('applies phase updates and ignores an older generation', async () => {
+    const { port, resolve } = createDeferredWatchPort();
+    await startExam(port);
+    openDetail();
+    expand('对照');
+    const coverageDeck = {
+      ...firstDeck,
+      cards: [{
+        ...firstCard,
+        status: 'scored' as const,
+        answer: '叶子节点存整行',
+        coverage: 'deepen' as const,
+        evaluation: { stage: 'coverage_ready' as const, version: 1 },
+      }],
+      evaluation: { stage: 'coverage_ready' as const, version: 1, cardId: 'Q1' },
+    };
+    await act(async () => {
+      resolve({ ok: true, status: 'updated', deck: coverageDeck, stage: 'coverage_ready', generation: 1 });
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('card-comparison').textContent).toContain('正在生成对照');
+    });
+    const staleDeck = {
+      ...firstDeck,
+      cards: [{ ...firstCard, evaluation: { stage: 'answer_received' as const, version: 0 } }],
+      evaluation: { stage: 'answer_received' as const, version: 0, cardId: 'Q1' },
+    };
+    await act(async () => {
+      resolve({ ok: true, status: 'updated', deck: staleDeck, stage: 'answer_received', generation: 0 });
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('card-comparison').textContent).toContain('正在生成对照');
+    });
+    expand('作答');
+    expect(screen.getByTestId('card-answer').textContent).toContain('叶子节点存整行');
+  });
+
   it('opens current-card detail from flow while next is generating', async () => {
     const { port, resolve } = createDeferredWatchPort();
     await startExam(port);

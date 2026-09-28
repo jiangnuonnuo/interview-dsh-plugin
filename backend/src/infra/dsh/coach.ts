@@ -13,6 +13,7 @@ const FIRST_QUESTION_TIMEOUT_MS = 90_000;
 const FIRST_QUESTION_POLL_MS = 300;
 const WATCH_TIMEOUT_MS = 20_000;
 const WATCH_POLL_MS = 300;
+const QUESTION_STABILITY_WINDOW_MS = 120;
 
 interface CoachHostSession {
   snapshotEvents?: () => readonly unknown[];
@@ -36,6 +37,7 @@ export interface CoachHostContext {
       model: string;
       system: string;
       messages: readonly unknown[];
+      signal?: AbortSignal;
     }): AsyncIterable<{ type?: string; text?: string; reason?: { kind?: string; failure?: { message?: string } } }>;
   };
   readonly agentDefaultModel?: {
@@ -312,7 +314,9 @@ export const createHostCoachRuntime = (
               () => undefined,
               () => undefined,
             ),
-            remaining > 0 ? sleep(remaining, idleWait.signal) : Promise.resolve(),
+            remaining > 0
+              ? sleep(Math.min(QUESTION_STABILITY_WINDOW_MS, remaining), idleWait.signal)
+              : Promise.resolve(),
           ]);
           idleWait.abort();
           const after = asCoachAgent(ctx.agents?.get(sessionId));
@@ -353,7 +357,7 @@ export const createHostCoachRuntime = (
       return followUpFailed();
     }
   },
-  async complete(system, user) {
+  async complete(system, user, signal) {
     const llm = ctx.llm;
     const selection = ctx.agentDefaultModel?.currentSelection();
     if (typeof llm?.stream !== 'function' || !selection?.provider || !selection.model) {
@@ -377,6 +381,7 @@ export const createHostCoachRuntime = (
         model: selection.model,
         system,
         messages,
+        signal,
       })) {
         if (chunk.type === 'text-delta' && typeof chunk.text === 'string') {
           text += chunk.text;

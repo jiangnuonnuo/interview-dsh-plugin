@@ -8,6 +8,7 @@ export type InterviewSessionErrorCode =
   | 'first_question_failed'
   | 'follow_up_failed'
   | 'persist_unavailable'
+  | 'evaluation_cancelled'
   | 'closing_failed';
 
 export const INTERVIEW_SESSION_ERROR_MESSAGES: Record<InterviewSessionErrorCode, string> = {
@@ -18,6 +19,7 @@ export const INTERVIEW_SESSION_ERROR_MESSAGES: Record<InterviewSessionErrorCode,
   first_question_failed: '面试官开口失败。',
   follow_up_failed: '无法看守下一问：本场记录不存在，或当前 Host 读不到最新题干。',
   persist_unavailable: '无法写入工作区练习记录：当前没有可用的工作区目录或文件系统。',
+  evaluation_cancelled: '本题结果生成已取消，已保留此前可见的卡片内容。',
   closing_failed: '无法发送本轮收尾。问答与总结仍会尝试写入。',
 };
 
@@ -63,6 +65,27 @@ export const BAGUA_SCORE_DIMENSIONS = [
 export type BaguaScoreDimension = (typeof BAGUA_SCORE_DIMENSIONS)[number];
 
 export type CardStatus = 'pending' | 'scored';
+
+export const CARD_EVALUATION_STAGES = [
+  'idle',
+  'answer_received',
+  'coverage_ready',
+  'comparison_ready',
+  'brief_ready',
+  'failed',
+  'cancelled',
+] as const;
+
+export type CardEvaluationStage = (typeof CARD_EVALUATION_STAGES)[number];
+
+export const isCardEvaluationStage = (value: unknown): value is CardEvaluationStage =>
+  typeof value === 'string' && (CARD_EVALUATION_STAGES as readonly string[]).includes(value);
+
+export interface CardEvaluationState {
+  readonly stage: CardEvaluationStage;
+  readonly version: number;
+  readonly error?: string;
+}
 
 export type CardRelation = 'followup' | 'next_topic';
 
@@ -120,6 +143,7 @@ export interface QuestionCard {
   readonly coverage?: AnswerCoverage | null;
   readonly layer?: ExamLayer;
   readonly intent?: string;
+  readonly evaluation?: CardEvaluationState;
 }
 
 export type InterviewPhase = 'in_progress';
@@ -132,7 +156,49 @@ export interface InterviewDeck {
   readonly archiveDir: string;
   readonly cards: readonly QuestionCard[];
   readonly currentCardId: string;
+  readonly evaluation?: CardEvaluationState & { readonly cardId?: string };
 }
+
+const evaluationStageRank: Record<CardEvaluationStage, number> = {
+  idle: 0,
+  answer_received: 1,
+  coverage_ready: 2,
+  comparison_ready: 3,
+  brief_ready: 4,
+  failed: 5,
+  cancelled: 5,
+};
+
+export const compareEvaluationState = (
+  current: CardEvaluationState | undefined,
+  next: CardEvaluationState | undefined,
+): number => {
+  if (current === undefined && next === undefined) return 0;
+  if (current === undefined) return -1;
+  if (next === undefined) return 1;
+  if (current.version !== next.version) return current.version < next.version ? -1 : 1;
+  const currentRank = evaluationStageRank[current.stage];
+  const nextRank = evaluationStageRank[next.stage];
+  if (currentRank !== nextRank) return currentRank < nextRank ? -1 : 1;
+  return 0;
+};
+
+export const mergeInterviewDeck = (current: InterviewDeck | null, next: InterviewDeck): InterviewDeck => {
+  if (current === null || current.sessionId !== next.sessionId) return next;
+  const cards = next.cards.map((nextCard) => {
+    const currentCard = current.cards.find((card) => card.id === nextCard.id);
+    if (currentCard === undefined) return nextCard;
+    return compareEvaluationState(currentCard.evaluation, nextCard.evaluation) > 0 ? currentCard : nextCard;
+  });
+  const hasNewCard = next.cards.some((nextCard) => !current.cards.some((card) => card.id === nextCard.id));
+  if (!hasNewCard && compareEvaluationState(current.evaluation, next.evaluation) > 0) return current;
+  return {
+    ...next,
+    cards,
+    evaluation:
+      compareEvaluationState(current.evaluation, next.evaluation) > 0 ? current.evaluation : next.evaluation,
+  };
+};
 
 export const createPendingCard = (input: {
   readonly id: string;
@@ -154,6 +220,7 @@ export const createPendingCard = (input: {
   seedUserText: input.seedUserText ?? '',
   answerTurns: [],
   guideCount: 0,
+  evaluation: { stage: 'idle', version: 0 },
   ...(input.layer !== undefined ? { layer: input.layer } : {}),
   ...(input.intent !== undefined ? { intent: input.intent } : {}),
 });
@@ -249,14 +316,24 @@ export type WatchCoachTurnResponse =
       readonly ok: true;
       readonly status: 'updated';
       readonly deck: InterviewDeck;
+      readonly stage?: CardEvaluationStage;
+      readonly generation?: number;
       readonly jevAccelerated?: boolean;
     }
-  | { readonly ok: true; readonly status: 'unchanged'; readonly jevAccelerated?: boolean }
+  | {
+      readonly ok: true;
+      readonly status: 'unchanged';
+      readonly stage?: CardEvaluationStage;
+      readonly generation?: number;
+      readonly jevAccelerated?: boolean;
+    }
   | {
       readonly ok: false;
       readonly code: InterviewSessionErrorCode;
       readonly message: string;
       readonly deck?: InterviewDeck;
+      readonly stage?: CardEvaluationStage;
+      readonly generation?: number;
       readonly jevAccelerated?: boolean;
     };
 

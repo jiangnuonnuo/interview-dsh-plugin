@@ -59,6 +59,8 @@ export interface ParsedCoachBrief {
   readonly chain?: ParsedChain;
 }
 
+export type CoachBriefCache = Map<string, ParsedCoachBrief>;
+
 export type CoachQuestionFailure = {
   readonly ok: false;
   readonly code: Extract<InterviewSessionErrorCode, 'inject_unavailable' | 'first_question_failed' | 'follow_up_failed'>;
@@ -211,7 +213,7 @@ export interface CoachRuntime {
     baselineText: string,
     options?: AwaitNewQuestionOptions,
   ): Promise<AwaitNewQuestionResult>;
-  complete(system: string, user: string): Promise<string | null>;
+  complete(system: string, user: string, signal?: AbortSignal): Promise<string | null>;
   whenIdle?(sessionId: string): Promise<void>;
 }
 

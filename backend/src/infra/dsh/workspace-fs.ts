@@ -134,14 +134,6 @@ const parseDeck = (raw: string | undefined): InterviewDeck | undefined => {
   }
 };
 
-const writeAll = async (fs: WorkspaceTextFs, deck: InterviewDeck, cwd: string): Promise<void> => {
-  const archiveDir = deck.archiveDir;
-  await writeRel(fs, cwd, deck.sessionId, `${archiveDir}/session.json`, `${JSON.stringify(deck, null, 2)}\n`);
-  for (const card of deck.cards) {
-    await writeRel(fs, cwd, deck.sessionId, `${archiveDir}/cards/${card.id}.md`, renderCardMarkdown(deck, card.id));
-  }
-};
-
 /**
  * Host 落盘只走 ctx.fs。查不到 fs 或会话 cwd 时可见失败，禁止 node:fs。
  * TODO: 若本机 Desktop 顶层 inject `fs` 导致 apply 失败，改为仅 ctx.get('fs') 探测。
@@ -150,6 +142,29 @@ export const createFsWorkspaceArchive = (
   fs: WorkspaceTextFs | undefined,
   workspace: ArchiveWorkspaceLookup,
 ): WorkspaceArchive => {
+  const lastDeckJson = new Map<string, string>();
+  const lastCardMarkdown = new Map<string, Map<string, string>>();
+
+  const writeIncremental = async (deck: InterviewDeck, cwd: string): Promise<void> => {
+    const archiveDir = deck.archiveDir;
+    const cacheKey = `${deck.sessionId}:${archiveDir}`;
+    const serialized = `${JSON.stringify(deck, null, 2)}\n`;
+    const previousCards = lastCardMarkdown.get(cacheKey) ?? new Map<string, string>();
+    const currentCards = new Map<string, string>();
+    for (const card of deck.cards) {
+      const markdown = renderCardMarkdown(deck, card.id);
+      currentCards.set(card.id, markdown);
+      if (previousCards.get(card.id) !== markdown) {
+        await writeRel(fs as WorkspaceTextFs, cwd, deck.sessionId, `${archiveDir}/cards/${card.id}.md`, markdown);
+      }
+    }
+    lastCardMarkdown.set(cacheKey, currentCards);
+    if (lastDeckJson.get(cacheKey) !== serialized) {
+      await writeRel(fs as WorkspaceTextFs, cwd, deck.sessionId, `${archiveDir}/session.json`, serialized);
+      lastDeckJson.set(cacheKey, serialized);
+    }
+  };
+
   const readIndex = async (sessionId: string): Promise<ExamRoundIndex | undefined> => {
     if (fs === undefined) {
       return undefined;
@@ -237,7 +252,7 @@ export const createFsWorkspaceArchive = (
       }
       const next: InterviewDeck = { ...deck, archiveDir };
       try {
-        await writeAll(fs, next, cwd);
+        await writeIncremental(next, cwd);
       } catch {
         return persistUnavailable();
       }

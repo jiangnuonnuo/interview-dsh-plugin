@@ -1,4 +1,4 @@
-import type { InterviewDeck } from 'interview-dsh-shared';
+import { mergeInterviewDeck, type InterviewDeck } from 'interview-dsh-shared';
 
 const listeners = new Set<() => void>();
 
@@ -45,7 +45,7 @@ export const examPanelState = {
     return deck?.sessionId ?? readStoredSessionId();
   },
   set(next: InterviewDeck | null): void {
-    deck = next;
+    deck = next === null ? null : mergeInterviewDeck(deck, next);
     writeStoredSessionId(next?.sessionId ?? null);
     notify();
   },

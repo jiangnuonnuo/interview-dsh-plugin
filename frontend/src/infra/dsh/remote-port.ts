@@ -132,7 +132,17 @@ export const createInterviewPort = (
       );
     },
     watchCoachTurn(request) {
-      return unwrap(remote.watchCoachTurn(request) as Promise<WatchCoachTurnResponse>, 'watchCoachTurn');
+      return unwrap(remote.watchCoachTurn(request) as Promise<WatchCoachTurnResponse>, 'watchCoachTurn').then(
+        (result) => {
+          if (result.ok && result.status === 'updated' && result.deck.sessionId !== request.sessionId) {
+            throw new Error('watchCoachTurn returned a deck for another session');
+          }
+          if (!result.ok && result.deck !== undefined && result.deck.sessionId !== request.sessionId) {
+            throw new Error('watchCoachTurn returned an error deck for another session');
+          }
+          return result;
+        },
+      );
     },
     loadDeck(request) {
       return unwrap(remote.loadDeck(request) as Promise<LoadDeckResponse>, 'loadDeck');

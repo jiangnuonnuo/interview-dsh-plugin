@@ -5,7 +5,7 @@
 import { BAGUA_SCORE_DIMENSIONS, createInterviewDeck, createPendingCard, type InterviewDeck } from 'interview-dsh-shared';
 import { createExamSessionStore } from '../src/data/exam-session-store.js';
 import { createChainMemory } from '../src/services/knowledge-chain.js';
-import { watchCoachTurnSession } from '../src/services/watch-coach-turn.js';
+import { NEW_QUESTION_STABILITY_WINDOW_MS, watchCoachTurnSession } from '../src/services/watch-coach-turn.js';
 import { chainBrief } from './chain-json.js';
 import { stubCoach } from './coach-stub.js';
 
@@ -170,6 +170,29 @@ describe('watchCoachTurnSession jev coverage', () => {
     expect(order[0]).toBe('idle');
     expect(order).toContain('install');
     expect(order.indexOf('idle')).toBeLessThan(order.indexOf('install'));
+  });
+
+  it('uses a short stability window when the host stays busy', async () => {
+    const examSessions = seedStore();
+    const started = Date.now();
+    const result = await watchCoachTurnSession(
+      stubCoach({
+        readLatestHuman: async () => ({ ok: true, text: '叶子节点存的是整行。' }),
+        awaitNewQuestion: async () => ({ ok: true, status: 'ready', text: '二级索引如何回表？' }),
+        whenIdle: async () => new Promise<void>(() => undefined),
+        complete: async (_system, user) => user.includes('候选人作答')
+          ? scoreBody('deepen')
+          : chainBrief({ questionBrief: '回表', keyPoints: ['先查二级'], relation: 'followup' }),
+      }),
+      examSessions,
+      { sessionId: 'session-exam' },
+      { pollMs: 1 },
+      undefined,
+      undefined,
+      { settle: async () => 'deepen' },
+    );
+    expect(Date.now() - started).toBeLessThan(NEW_QUESTION_STABILITY_WINDOW_MS * 8);
+    expect(result.ok).toBe(true);
   });
 
   it('falls back to comparison coverage when jev fails and does not surface a jev error', async () => {

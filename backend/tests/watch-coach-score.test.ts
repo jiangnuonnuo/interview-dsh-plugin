@@ -104,6 +104,65 @@ describe('watchCoachTurnSession scoring', () => {
     expect(complete).toHaveBeenCalledTimes(1);
   });
 
+  it('persists answer and comparison stages independently', async () => {
+    const examSessions = seedStore();
+    const writes: InterviewDeck[] = [];
+    let release: (value: string) => void = () => undefined;
+    const archive: WorkspaceArchive = {
+      writeDeck: async (deck) => {
+        writes.push(deck);
+        return { ok: true, archiveDir: deck.archiveDir };
+      },
+      readDeck: async () => undefined,
+    };
+    const task = watchCoachTurnSession(
+      stubCoach({
+        readLatestHuman: async () => ({ ok: true, text: '叶子节点存的是整行。' }),
+        complete: async () => new Promise((resolve) => { release = resolve; }),
+      }),
+      examSessions,
+      { sessionId: 'session-exam' },
+      {},
+      archive,
+      undefined,
+      { settle: async () => 'deepen' },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(writes.map((deck) => deck.evaluation?.stage)).toContain('answer_received');
+    release(scoreBody('deepen'));
+    const result = await task;
+    expect(result.ok).toBe(true);
+    expect(writes.map((deck) => deck.evaluation?.stage)).toContain('coverage_ready');
+    expect(writes.map((deck) => deck.evaluation?.stage)).toContain('comparison_ready');
+  });
+
+  it('surfaces a stage persistence failure without claiming completion', async () => {
+    const examSessions = seedStore();
+    let writes = 0;
+    const archive: WorkspaceArchive = {
+      writeDeck: async () => {
+        writes += 1;
+        return writes === 1
+          ? { ok: true, archiveDir: '.dsh-interview/session-exam/round-1-MySQL' }
+          : { ok: false, code: 'persist_unavailable', message: '写入失败' };
+      },
+      readDeck: async () => undefined,
+    };
+    const result = await watchCoachTurnSession(
+      stubCoach({
+        readLatestHuman: async () => ({ ok: true, text: '叶子节点存的是整行。' }),
+        complete: async () => scoreBody('next'),
+      }),
+      examSessions,
+      { sessionId: 'session-exam' },
+      {},
+      archive,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('persist_unavailable');
+    expect(result.deck?.cards[0]?.answer).toBe('叶子节点存的是整行。');
+  });
+
   it('keeps the card pending when scores are incomplete', async () => {
     const examSessions = seedStore();
     const result = await watchCoachTurnSession(
