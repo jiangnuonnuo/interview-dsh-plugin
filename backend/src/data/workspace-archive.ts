@@ -105,6 +105,10 @@ export const renderCardMarkdown = (deck: InterviewDeck, cardId: string): string 
   const lines = [
     `# ${card.id}`,
     '',
+    '## 状态',
+    card.evaluation?.stage ?? 'idle',
+    ...(card.evaluation?.error !== undefined ? [`错误：${card.evaluation.error}`] : []),
+    '',
     '## 题干',
     card.questionText,
     '',

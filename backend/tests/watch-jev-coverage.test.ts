@@ -4,6 +4,7 @@
 
 import { BAGUA_SCORE_DIMENSIONS, createInterviewDeck, createPendingCard, type InterviewDeck } from 'interview-dsh-shared';
 import { createExamSessionStore } from '../src/data/exam-session-store.js';
+import type { WorkspaceArchive } from '../src/data/workspace-archive.js';
 import { createChainMemory } from '../src/services/knowledge-chain.js';
 import { NEW_QUESTION_STABILITY_WINDOW_MS, watchCoachTurnSession } from '../src/services/watch-coach-turn.js';
 import { chainBrief } from './chain-json.js';
@@ -172,6 +173,38 @@ describe('watchCoachTurnSession jev coverage', () => {
     expect(order.indexOf('idle')).toBeLessThan(order.indexOf('install'));
   });
 
+  it('keeps the enriched preview card when chain installation fails', async () => {
+    const examSessions = seedStore();
+    const result = await watchCoachTurnSession(
+      stubCoach({
+        readLatestHuman: async () => ({ ok: true, text: '叶子节点存的是整行。' }),
+        awaitNewQuestion: async () => ({ ok: true, status: 'ready', text: '二级索引如何回表？' }),
+        complete: async (_system, user) => user.includes('候选人作答')
+          ? scoreBody('deepen')
+          : chainBrief({ questionBrief: '回表', keyPoints: ['先查二级'], relation: 'followup' }),
+      }),
+      examSessions,
+      { sessionId: 'session-exam' },
+      {},
+      undefined,
+      {
+        memory: createChainMemory(),
+        port: {
+          install: () => ({ ok: false }),
+          clear: () => undefined,
+        },
+      },
+      { settle: async () => 'deepen' },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('inject_unavailable');
+      expect(result.deck?.cards.map((card) => card.id)).toEqual(['Q1', 'Q1.1']);
+      expect(result.deck?.cards[1]?.keyPoints).toEqual(['先查二级']);
+      expect(result.deck?.cards[1]?.evaluation?.stage).toBe('failed');
+    }
+  });
+
   it('uses a short stability window when the host stays busy', async () => {
     const examSessions = seedStore();
     const started = Date.now();
@@ -297,6 +330,99 @@ describe('watchCoachTurnSession jev coverage', () => {
       expect(result.deck.cards[0]?.comparison?.comment).toBe('后到的评语');
       expect(result.deck.cards[1]?.id).toBe('Q1.1');
     }
+  });
+
+  it('restores a jev route on the next watch and opens the follow-up card', async () => {
+    const examSessions = seedStore();
+    let questionReady = false;
+    const runtime = stubCoach({
+      readLatestHuman: async () => ({ ok: true, text: '叶子节点存的是整行。' }),
+      awaitNewQuestion: async () =>
+        questionReady
+          ? { ok: true as const, status: 'ready' as const, text: '二级索引如何回表？' }
+          : { ok: true as const, status: 'unchanged' as const },
+      complete: async (_system, user) =>
+        user.includes('候选人作答')
+          ? scoreBody('miss', '异步对照')
+          : chainBrief({ questionBrief: '回表', keyPoints: ['先查二级'], relation: 'followup' }),
+    });
+
+    const settled = await watchCoachTurnSession(
+      runtime,
+      examSessions,
+      { sessionId: 'session-exam' },
+      { pollMs: 1 },
+      undefined,
+      undefined,
+      { settle: async () => 'deepen' },
+    );
+    expect(settled.ok).toBe(true);
+    expect(examSessions.load('session-exam')?.deck.routePlan).toMatchObject({
+      cardId: 'Q1',
+      coverage: 'deepen',
+      awaitingQuestion: true,
+    });
+
+    questionReady = true;
+    const followed = await watchCoachTurnSession(runtime, examSessions, { sessionId: 'session-exam' });
+    expect(followed.ok).toBe(true);
+    expect(examSessions.load('session-exam')?.deck.cards.map((card) => card.id)).toEqual(['Q1', 'Q1.1']);
+    expect(examSessions.load('session-exam')?.deck.routePlan).toBeUndefined();
+  });
+
+  it('publishes a preview card before the brief model returns', async () => {
+    const examSessions = seedStore();
+    const writes: InterviewDeck[] = [];
+    const archive: WorkspaceArchive = {
+      writeDeck: async (deck) => {
+        writes.push(deck);
+        return { ok: true, archiveDir: deck.archiveDir };
+      },
+      readDeck: async () => undefined,
+    };
+    let releaseScore: (value: string) => void = () => undefined;
+    let releaseBrief: (value: string) => void = () => undefined;
+    const complete = jest.fn(
+      (_system: string, user: string) =>
+        new Promise<string | null>((resolve) => {
+          if (user.includes('候选人作答')) {
+            releaseScore = (value) => resolve(value);
+          } else {
+            releaseBrief = (value) => resolve(value);
+          }
+        }),
+    );
+    const task = watchCoachTurnSession(
+      stubCoach({
+        readLatestHuman: async () => ({ ok: true, text: '叶子节点存的是整行。' }),
+        awaitNewQuestion: async () => ({ ok: true, status: 'ready', text: '二级索引如何回表？' }),
+        complete,
+      }),
+      examSessions,
+      { sessionId: 'session-exam' },
+      {},
+      archive,
+      undefined,
+      { settle: async () => 'next' },
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const preview = examSessions.load('session-exam')?.deck;
+    expect(preview?.cards.map((card) => card.id)).toEqual(['Q1', 'Q2']);
+    expect(preview?.cards[1]?.questionText).toBe('二级索引如何回表？');
+    expect(preview?.cards[1]?.evaluation?.stage).toBe('preview_ready');
+    expect(preview?.cards[1]?.keyPoints).toEqual([]);
+    expect(writes.some((deck) => deck.cards.some((card) => card.id === 'Q2' && card.evaluation?.stage === 'preview_ready'))).toBe(true);
+
+    releaseBrief(chainBrief({ questionBrief: '回表', keyPoints: ['先查二级'], relation: 'next_topic' }));
+    releaseScore(scoreBody('next', '后到的评语'));
+    const result = await task;
+    expect(result.ok).toBe(true);
+    if (result.ok && result.status === 'updated') {
+      expect(result.deck.cards[1]?.evaluation?.stage).toBe('brief_ready');
+      expect(result.deck.cards[1]?.keyPoints).toEqual(['先查二级']);
+    }
+    expect(complete).toHaveBeenCalledTimes(2);
   });
 
   it('does not open a card or show a next slot on jev miss', async () => {

@@ -137,6 +137,26 @@ describe('InProgressPanel', () => {
     expect(screen.queryByText('Jev')).toBeNull();
   });
 
+  it('shows a preview card before reference points are ready', () => {
+    const previewDeck = createInterviewDeck({
+      sessionId: 'session-exam',
+      topic: 'MySQL 索引与优化',
+      difficulty: 'mid',
+      cards: [{
+        ...q2,
+        keyPoints: [],
+        evaluation: { stage: 'preview_ready' as const, version: 1 },
+      }],
+      currentCardId: 'Q2',
+    });
+    render(<InProgressPanel deck={previewDeck} />);
+    expect(screen.getByTestId('card-id').textContent).toBe('Q2');
+    openDetail();
+    expect(screen.getByText('二级索引如何回表？')).toBeDefined();
+    expect(screen.getByTestId('brief-generating').textContent).toContain('后台补充参考要点');
+    expect(screen.queryByText('先查二级再回聚簇')).toBeNull();
+  });
+
   it('opens detail from 查看完整内容 even after pointerdown on the CTA', () => {
     render(<InProgressPanel deck={pendingDeck} />);
     const cta = screen.getByTestId('open-card-detail');
@@ -293,6 +313,24 @@ describe('InProgressPanel', () => {
     render(<InProgressPanel deck={failedDeck} />);
     expect(screen.getByRole('alert').textContent).toContain('对照生成失败');
     expect(screen.getByText('聚簇索引和二级索引的区别')).toBeDefined();
+  });
+
+  it('shows a brief failure instead of an endless loading state', () => {
+    const failedPreview = createInterviewDeck({
+      sessionId: 'session-exam',
+      topic: 'MySQL 索引与优化',
+      difficulty: 'mid',
+      cards: [{
+        ...q2,
+        keyPoints: [],
+        evaluation: { stage: 'failed' as const, version: 1, error: '参考生成失败' },
+      }],
+      currentCardId: 'Q2',
+    });
+    render(<InProgressPanel deck={failedPreview} />);
+    openDetail();
+    expect(screen.getByTestId('brief-failed').textContent).toContain('参考生成失败');
+    expect(screen.queryByTestId('brief-generating')).toBeNull();
   });
 
   it.each([

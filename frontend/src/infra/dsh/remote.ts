@@ -69,6 +69,7 @@ const briefRequestSchema = z.object({
 const evaluationStageSchema = z.enum([
   'idle',
   'answer_received',
+  'preview_ready',
   'coverage_ready',
   'comparison_ready',
   'brief_ready',
@@ -122,6 +123,12 @@ const deckSchema = z.object({
   cards: z.array(cardSchema),
   currentCardId: z.string(),
   evaluation: evaluationStateSchema.extend({ cardId: z.string().optional() }).optional(),
+  routePlan: z.object({
+    cardId: z.string(),
+    version: z.number().int().nonnegative(),
+    coverage: z.enum(['miss', 'wide_gap', 'deepen', 'reask', 'next']),
+    awaitingQuestion: z.boolean(),
+  }).optional(),
 });
 
 const briefResultSchema = z.union([

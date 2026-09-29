@@ -2,7 +2,14 @@
  * @jest-environment node
  */
 
-import { createInterviewDeck, createPendingCard, mergeInterviewDeck, BAGUA_SCORE_DIMENSIONS } from 'interview-dsh-shared';
+import {
+  createInterviewDeck,
+  createPendingCard,
+  isCardBriefGenerating,
+  mergeInterviewDeck,
+  previewQuestionBrief,
+  BAGUA_SCORE_DIMENSIONS,
+} from 'interview-dsh-shared';
 import { createExamSessionStore } from '../src/data/exam-session-store.js';
 import { watchCoachTurnSession } from '../src/services/watch-coach-turn.js';
 import { stubCoach } from './coach-stub.js';
@@ -24,6 +31,23 @@ describe('stage deck merge', () => {
     };
     expect(mergeInterviewDeck(base, next).cards[0]?.answer).toBe('回答');
     expect(mergeInterviewDeck(base, next).evaluation?.stage).toBe('coverage_ready');
+  });
+
+  it('orders preview before coverage and derives a local brief', () => {
+    const preview = {
+      ...base,
+      cards: [{ ...base.cards[0], evaluation: { stage: 'preview_ready' as const, version: 1 } }],
+      evaluation: { stage: 'preview_ready' as const, version: 1, cardId: 'Q1' },
+    };
+    const coverage = {
+      ...base,
+      cards: [{ ...base.cards[0], evaluation: { stage: 'coverage_ready' as const, version: 1 } }],
+      evaluation: { stage: 'coverage_ready' as const, version: 1, cardId: 'Q1' },
+    };
+    expect(mergeInterviewDeck(base, preview).evaluation?.stage).toBe('preview_ready');
+    expect(mergeInterviewDeck(preview, coverage).evaluation?.stage).toBe('coverage_ready');
+    expect(previewQuestionBrief('**请解释** B+ 树\n\n补充说明')).toBe('请解释 B+ 树 补充说明');
+    expect(isCardBriefGenerating({ evaluation: preview.cards[0]?.evaluation, keyPoints: [] })).toBe(true);
   });
 
   it('rejects an older snapshot after a newer stage', () => {

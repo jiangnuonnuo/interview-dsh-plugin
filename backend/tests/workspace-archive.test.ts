@@ -145,6 +145,37 @@ describe('workspace archive', () => {
     expect(renderCardMarkdown(twoCardDeck, 'Q1')).toContain('叶子即行');
   });
 
+  it('persists and restores a preview card before reference points arrive', async () => {
+    const { files, fs } = createFakeFs();
+    const archive = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' });
+    const preview = {
+      ...createPendingCard({
+        id: 'Q2',
+        questionText: '覆盖索引为什么可以减少回表？',
+        questionBrief: '覆盖索引为什么可以减少回表？',
+        keyPoints: [],
+      }),
+      evaluation: { stage: 'preview_ready' as const, version: 1 },
+    };
+    const deck = createInterviewDeck({
+      sessionId: 'session-exam',
+      topic: 'MySQL 索引与优化',
+      difficulty: 'mid',
+      cards: [q1, preview],
+      currentCardId: 'Q2',
+    });
+    const written = await archive.writeDeck(deck);
+    expect(written.ok).toBe(true);
+    if (!written.ok) return;
+    expect(files.get(`/workspace/${written.archiveDir}/session.json`)).toContain('"stage": "preview_ready"');
+    const markdown = files.get(`/workspace/${written.archiveDir}/cards/Q2.md`);
+    expect(markdown).toContain('## 状态\npreview_ready');
+    expect(markdown).toContain('覆盖索引为什么可以减少回表？');
+    const restored = await createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' }).readDeck('session-exam');
+    expect(restored?.cards[1]?.evaluation?.stage).toBe('preview_ready');
+    expect(restored?.cards[1]?.keyPoints).toEqual([]);
+  });
+
   it('ignores a leftover study archiveDir on write', async () => {
     const { files, fs } = createFakeFs();
     const archive = createFsWorkspaceArchive(fs, { cwdFor: () => '/workspace' });

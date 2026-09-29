@@ -69,6 +69,7 @@ export type CardStatus = 'pending' | 'scored';
 export const CARD_EVALUATION_STAGES = [
   'idle',
   'answer_received',
+  'preview_ready',
   'coverage_ready',
   'comparison_ready',
   'brief_ready',
@@ -88,6 +89,27 @@ export interface CardEvaluationState {
 }
 
 export type CardRelation = 'followup' | 'next_topic';
+
+export interface CoverageRoutePlan {
+  readonly cardId: string;
+  readonly version: number;
+  readonly coverage: AnswerCoverage;
+  readonly awaitingQuestion: boolean;
+}
+
+export const isCoverageRoutePlan = (value: unknown): value is CoverageRoutePlan => {
+  if (typeof value !== 'object' || value === null) return false;
+  const route = value as Partial<CoverageRoutePlan>;
+  return (
+    typeof route.cardId === 'string' &&
+    route.cardId.length > 0 &&
+    typeof route.version === 'number' &&
+    Number.isInteger(route.version) &&
+    route.version >= 0 &&
+    isAnswerCoverage(route.coverage) &&
+    typeof route.awaitingQuestion === 'boolean'
+  );
+};
 
 export const EXAM_LAYERS = ['define', 'why', 'scene', 'boundary'] as const;
 
@@ -157,16 +179,44 @@ export interface InterviewDeck {
   readonly cards: readonly QuestionCard[];
   readonly currentCardId: string;
   readonly evaluation?: CardEvaluationState & { readonly cardId?: string };
+  readonly routePlan?: CoverageRoutePlan;
 }
 
 const evaluationStageRank: Record<CardEvaluationStage, number> = {
   idle: 0,
   answer_received: 1,
-  coverage_ready: 2,
-  comparison_ready: 3,
-  brief_ready: 4,
-  failed: 5,
-  cancelled: 5,
+  preview_ready: 2,
+  coverage_ready: 3,
+  comparison_ready: 4,
+  brief_ready: 5,
+  failed: 6,
+  cancelled: 6,
+};
+
+export const PREVIEW_BRIEF_MAX_LENGTH = 96;
+
+/**
+ * Builds a readable card title without spending a model call before the card is visible.
+ */
+export const previewQuestionBrief = (questionText: string): string => {
+  const cleaned = questionText
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/\*\*/g, '')
+    .replace(/^#+\s+/gm, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (cleaned.length <= PREVIEW_BRIEF_MAX_LENGTH) {
+    return cleaned;
+  }
+  return `${Array.from(cleaned).slice(0, PREVIEW_BRIEF_MAX_LENGTH).join('')}…`;
+};
+
+export const isCardBriefGenerating = (card: Pick<QuestionCard, 'evaluation' | 'keyPoints'>): boolean => {
+  const stage = card.evaluation?.stage;
+  if (stage === 'failed' || stage === 'cancelled' || stage === 'brief_ready') {
+    return false;
+  }
+  return stage === 'preview_ready' || card.keyPoints.length === 0;
 };
 
 export const compareEvaluationState = (

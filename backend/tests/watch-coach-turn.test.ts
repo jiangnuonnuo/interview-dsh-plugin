@@ -103,30 +103,22 @@ describe('watchCoachTurnSession', () => {
     expect(examSessions.load('session-exam')?.lastQuestionText).toBe('二级索引如何回表？');
   });
 
-  it('briefs the newer question if it arrives while the previous brief is running', async () => {
+  it('briefs the latest question once after publishing its preview', async () => {
     const complete = jest.fn(async (_system: string, user: string) => {
       if (user.includes('Redisson 看门狗')) {
         return chainBrief({ questionBrief: 'Redisson看门狗续期', keyPoints: ['客户端续期'] });
       }
       return chainBrief({ questionBrief: 'WATCH与Lua', keyPoints: ['单条命令原子'] });
     });
-    const awaitNewQuestion = jest
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 'ready',
-        text: '客户端 GET+SET 为何必须 WATCH 或 Lua？',
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 'ready',
-        text: 'Redisson 看门狗为什么在客户端续期？',
-      })
-      .mockResolvedValue({ ok: true, status: 'unchanged' });
+    const awaitNewQuestion = jest.fn(async () => ({
+      ok: true as const,
+      status: 'ready' as const,
+      text: 'Redisson 看门狗为什么在客户端续期？',
+    }));
     const examSessions = seedStore();
     const result = await watchCoachTurnSession(
       stubCoach({
-        readLatestQuestion: async () => ({ ok: true, text: '请说明聚簇索引。' }),
+        readLatestQuestion: async () => ({ ok: true, text: 'Redisson 看门狗为什么在客户端续期？' }),
         readLatestHuman: async () => ({ ok: true, text: '开始本场八股专项模拟面试。' }),
         awaitNewQuestion,
         complete,
@@ -141,7 +133,7 @@ describe('watchCoachTurnSession', () => {
       expect(result.deck.cards[1]?.questionBrief).toBe('Redisson看门狗续期');
       expect(result.deck.cards[1]?.keyPoints).toEqual(['客户端续期']);
     }
-    expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete).toHaveBeenCalledTimes(1);
     expect(examSessions.load('session-exam')?.lastQuestionText).toBe(
       'Redisson 看门狗为什么在客户端续期？',
     );
@@ -167,8 +159,60 @@ describe('watchCoachTurnSession', () => {
     if (!result.ok) {
       expect(result.code).toBe('coach_unavailable');
     }
-    expect(examSessions.load('session-exam')?.deck.cards).toEqual(deck.cards);
-    expect(examSessions.load('session-exam')?.lastQuestionText).toBe('请说明聚簇索引。');
+    const saved = examSessions.load('session-exam')?.deck;
+    expect(saved?.cards).toHaveLength(2);
+    expect(saved?.cards[0]).toEqual(deck.cards[0]);
+    expect(saved?.cards[1]?.questionText).toBe('二级索引如何回表？');
+    expect(saved?.cards[1]?.evaluation?.stage).toBe('failed');
+    expect(examSessions.load('session-exam')?.lastQuestionText).toBe('二级索引如何回表？');
+  });
+
+  it('settles a stuck preview brief into failed after the completion deadline', async () => {
+    const examSessions = seedStore();
+    const result = await watchCoachTurnSession(
+      stubCoach({
+        readLatestQuestion: async () => ({ ok: true, text: '请说明聚簇索引。' }),
+        readLatestHuman: async () => ({ ok: true, text: '开始本场八股专项模拟面试。' }),
+        awaitNewQuestion: async () => ({ ok: true, status: 'ready', text: '二级索引如何回表？' }),
+        complete: async () => new Promise<string | null>(() => undefined),
+      }),
+      examSessions,
+      { sessionId: 'session-exam' },
+      { completionTimeoutMs: 10 },
+    );
+    expect(result.ok).toBe(false);
+    expect(examSessions.load('session-exam')?.deck.cards[1]?.evaluation?.stage).toBe('failed');
+  });
+
+  it('returns the preview before a scheduled brief starts', async () => {
+    const examSessions = seedStore();
+    const scheduled: Array<() => Promise<void>> = [];
+    const complete = jest.fn(async () =>
+      chainBrief({ questionBrief: '回表', keyPoints: ['先查二级'] }),
+    );
+    const result = await watchCoachTurnSession(
+      stubCoach({
+        readLatestQuestion: async () => ({ ok: true, text: '请说明聚簇索引。' }),
+        readLatestHuman: async () => ({ ok: true, text: '开始本场八股专项模拟面试。' }),
+        awaitNewQuestion: async () => ({ ok: true, status: 'ready', text: '二级索引如何回表？' }),
+        complete,
+      }),
+      examSessions,
+      { sessionId: 'session-exam' },
+      {},
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Map(),
+      { schedule: (_key, task) => scheduled.push(task) },
+    );
+    expect(result.ok).toBe(true);
+    expect(examSessions.load('session-exam')?.deck.cards[1]?.evaluation?.stage).toBe('preview_ready');
+    expect(complete).not.toHaveBeenCalled();
+    await scheduled[0]?.();
+    expect(examSessions.load('session-exam')?.deck.cards[1]?.evaluation?.stage).toBe('brief_ready');
   });
 
   it('force-briefs the current pending card even when the fingerprint is unchanged', async () => {

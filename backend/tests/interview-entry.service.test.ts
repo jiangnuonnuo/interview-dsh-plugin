@@ -8,6 +8,7 @@ import { emptyJevSecret, type JevConfigStore, type JevSecretConfig } from '../sr
 import { createInterviewEntryService } from '../src/services/interview-entry.service.js';
 import { createExamSessionStore } from '../src/data/exam-session-store.js';
 import { createInterviewDeck, createPendingCard } from 'interview-dsh-shared';
+import { chainBrief } from './chain-json.js';
 
 const memoryJev = (secret: JevSecretConfig, writes: unknown[] = []): JevConfigStore => ({
   async loadPublic() {
@@ -65,7 +66,7 @@ describe('interview-entry.service', () => {
       {
         readLatestQuestion: async () => ({ ok: true as const, text: '请说明聚簇索引。' }),
         readLatestHuman: async () => ({ ok: true as const, text: '叶子节点存整行。' }),
-        awaitNewQuestion: async () => ({ ok: true as const, status: 'unchanged' as const }),
+        awaitNewQuestion: async () => ({ ok: true as const, status: 'ready' as const, text: '二级索引如何回表？' }),
         complete,
       },
       examSessions,
@@ -223,6 +224,62 @@ describe('interview-entry.service', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe('evaluation_cancelled');
     expect(examSessions.load('session-exam')?.ended).toBe(true);
+  });
+
+  it('returns a preview immediately and force refresh replaces a stuck enrichment', async () => {
+    const examSessions = createExamSessionStore();
+    examSessions.save({
+      sessionId: 'session-exam',
+      topic: 'MySQL',
+      difficulty: 'mid',
+      lastQuestionText: '旧题',
+      deck: createInterviewDeck({
+        sessionId: 'session-exam',
+        topic: 'MySQL',
+        difficulty: 'mid',
+        cards: [{
+          ...createPendingCard({ id: 'Q1', questionText: '旧题', questionBrief: '旧题', keyPoints: ['旧要点'] }),
+          status: 'scored',
+          coverage: 'next',
+          answer: '已答',
+          answerTurns: ['已答'],
+          comparison: { covered: [], missed: [], comment: '已评' },
+        }],
+        currentCardId: 'Q1',
+      }),
+    });
+    let calls = 0;
+    const complete = jest.fn(async (_system: string, user: string, signal?: AbortSignal) => {
+      calls += 1;
+      if (calls === 1) {
+        return new Promise<string | null>((resolve) => {
+          signal?.addEventListener('abort', () => resolve(null), { once: true });
+        });
+      }
+      return chainBrief({ questionBrief: '新题摘要', keyPoints: ['新题要点'] });
+    });
+    const service = createInterviewEntryService(
+      createEntryConfigStore(),
+      { install: () => ({ ok: true as const }) },
+      {
+        readLatestQuestion: async () => ({ ok: true as const, text: '新题' }),
+        readLatestHuman: async () => ({ ok: true as const, text: '已答' }),
+        awaitNewQuestion: async () => ({ ok: true as const, status: 'ready' as const, text: '新题' }),
+        complete,
+      },
+      examSessions,
+    );
+
+    const preview = await service.watchCoachTurn({ sessionId: 'session-exam' });
+    expect(preview.ok).toBe(true);
+    if (preview.ok && preview.status === 'updated') {
+      expect(preview.deck.cards[1]?.evaluation?.stage).toBe('preview_ready');
+    }
+    const retried = await service.watchCoachTurn({ sessionId: 'session-exam', force: true });
+    expect(retried.ok).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(examSessions.load('session-exam')?.deck.cards[1]?.evaluation?.stage).toBe('brief_ready');
   });
 
   it('saves a preset topic and mid difficulty', () => {

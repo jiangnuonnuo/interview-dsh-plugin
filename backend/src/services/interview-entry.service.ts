@@ -113,10 +113,43 @@ export const createInterviewEntryService = (
   const chainMemory = createChainMemory();
   const watchFlights = new Map<string, Promise<WatchCoachTurnResponse>>();
   const watchControllers = new Map<string, AbortController>();
+  const enrichmentFlights = new Map<
+    string,
+    { readonly sessionId: string; readonly controller: AbortController; readonly task: Promise<void> }
+  >();
+  const enrichmentSessions = new Set<string>();
   const watchResults = new Map<string, { readonly expiresAt: number; readonly response: WatchCoachTurnResponse }>();
   const cancelledSessions = new Set<string>();
   const jevProbeCache = new Map<string, string>();
   const briefCache: CoachBriefCache = new Map();
+  const cancelEnrichment = (sessionId: string) => {
+    for (const [key, flight] of enrichmentFlights) {
+      if (flight.sessionId !== sessionId) continue;
+      flight.controller.abort();
+      enrichmentFlights.delete(key);
+    }
+  };
+  const watchSnapshot = (sessionId: string): WatchCoachTurnResponse => {
+    const record = examSessions.load(sessionId);
+    const card = record?.deck.cards[record.deck.cards.length - 1];
+    const evaluation = record?.deck.evaluation ?? card?.evaluation;
+    if (record === undefined || evaluation === undefined || evaluation.stage === 'idle') {
+      return {
+        ok: true,
+        status: 'unchanged',
+        stage: evaluation?.stage,
+        generation: evaluation?.version,
+      };
+    }
+    return {
+      ok: true,
+      status: 'updated',
+      deck: record.deck,
+      stage: evaluation.stage,
+      generation: evaluation.version,
+      ...(record.jevAccelerated === true ? { jevAccelerated: true } : {}),
+    };
+  };
   const hooks: ChainHooks = {
     memory: chainMemory,
     ...(persona.installChain !== undefined && persona.clearChain !== undefined
@@ -229,29 +262,18 @@ export const createInterviewEntryService = (
     return briefCoachSession(coach, request, examSessions, archive, hooks);
   },
   async watchCoachTurn(request) {
+    if (request.force === true) {
+      watchControllers.get(request.sessionId)?.abort();
+      cancelEnrichment(request.sessionId);
+      watchFlights.delete(request.sessionId);
+      watchResults.delete(request.sessionId);
+    }
     const running = watchFlights.get(request.sessionId);
     if (running !== undefined) {
       return Promise.race([
         running,
         wait(WATCH_SNAPSHOT_DELAY_MS).then(() => {
-          const record = examSessions.load(request.sessionId);
-          const evaluation = record?.deck.evaluation;
-          if (record === undefined || evaluation === undefined || evaluation.stage === 'idle') {
-            return {
-              ok: true as const,
-              status: 'unchanged' as const,
-              stage: evaluation?.stage,
-              generation: evaluation?.version,
-            };
-          }
-          return {
-            ok: true as const,
-            status: 'updated' as const,
-            deck: record.deck,
-            stage: evaluation.stage,
-            generation: evaluation.version,
-            ...(record.jevAccelerated === true ? { jevAccelerated: true } : {}),
-          };
+          return watchSnapshot(request.sessionId);
         }),
       ]);
     }
@@ -275,6 +297,27 @@ export const createInterviewEntryService = (
     }
     const controller = new AbortController();
     watchControllers.set(request.sessionId, controller);
+    const background = {
+      schedule(key: string, run: () => Promise<void>) {
+        if (enrichmentFlights.has(key)) return;
+        enrichmentSessions.add(request.sessionId);
+        watchResults.delete(request.sessionId);
+        const task = run().catch(() => undefined);
+        enrichmentFlights.set(key, { sessionId: request.sessionId, controller, task });
+        void task.finally(() => {
+          if (enrichmentFlights.get(key)?.task === task) {
+            enrichmentFlights.delete(key);
+          }
+          const stillRunning = [...enrichmentFlights.values()].some(
+            (flight) => flight.sessionId === request.sessionId,
+          );
+          if (!stillRunning) {
+            enrichmentSessions.delete(request.sessionId);
+            watchResults.delete(request.sessionId);
+          }
+        });
+      },
+    };
     const task = watchCoachTurnSession(
       coach,
       examSessions,
@@ -286,11 +329,16 @@ export const createInterviewEntryService = (
       () => !cancelledSessions.has(request.sessionId),
       watchControllers.get(request.sessionId)?.signal,
       briefCache,
+      background,
     );
     watchFlights.set(request.sessionId, task);
     void task.then(
       (response) => {
-        if (!cancelledSessions.has(request.sessionId)) {
+        if (
+          !cancelledSessions.has(request.sessionId) &&
+          watchControllers.get(request.sessionId) === controller &&
+          !enrichmentSessions.has(request.sessionId)
+        ) {
           watchResults.set(request.sessionId, { response, expiresAt: Date.now() + WATCH_RESULT_TTL_MS });
         }
         if (watchFlights.get(request.sessionId) === task) {
@@ -305,29 +353,19 @@ export const createInterviewEntryService = (
         }
       },
     );
-    return Promise.race([
+    const response = await Promise.race([
       task,
       wait(WATCH_SNAPSHOT_DELAY_MS).then(() => {
-        const record = examSessions.load(request.sessionId);
-        const evaluation = record?.deck.evaluation;
-        if (record === undefined || evaluation === undefined || evaluation.stage === 'idle') {
-          return {
-            ok: true as const,
-            status: 'unchanged' as const,
-            stage: evaluation?.stage,
-            generation: evaluation?.version,
-          };
-        }
-        return {
-          ok: true as const,
-          status: 'updated' as const,
-          deck: record.deck,
-          stage: evaluation.stage,
-          generation: evaluation.version,
-          ...(record.jevAccelerated === true ? { jevAccelerated: true } : {}),
-        };
+        return watchSnapshot(request.sessionId);
       }),
     ]);
+    if (response.ok && response.status === 'unchanged') {
+      const snapshot = watchSnapshot(request.sessionId);
+      if (snapshot.ok && snapshot.status === 'updated') {
+        return snapshot;
+      }
+    }
+    return response;
   },
   loadDeck(request) {
     return loadDeckSession(examSessions, request, archive);
@@ -336,6 +374,7 @@ export const createInterviewEntryService = (
     cancelledSessions.add(request.sessionId);
     watchResults.delete(request.sessionId);
     watchControllers.get(request.sessionId)?.abort();
+    cancelEnrichment(request.sessionId);
     watchFlights.delete(request.sessionId);
     watchControllers.delete(request.sessionId);
     return endRoundSession(coach, examSessions, request, archive);

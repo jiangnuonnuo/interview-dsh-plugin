@@ -6,6 +6,7 @@ import {
   answerTurnsOf,
   coverageGuides,
   findCard,
+  isCardBriefGenerating,
   type InterviewDeck,
   type QuestionCard,
 } from 'interview-dsh-shared';
@@ -306,6 +307,8 @@ export const InProgressPanel = ({
   const evaluationError = card.evaluation?.error ?? deck.evaluation?.error;
   const comparisonGenerating =
     evaluationStage === 'answer_received' || evaluationStage === 'coverage_ready';
+  const briefGenerating = isCardBriefGenerating(card);
+  const briefFailed = evaluationStage === 'failed' && card.keyPoints.length === 0;
 
   const openDetail = () => {
     setViewMode('detail');
@@ -591,11 +594,21 @@ export const InProgressPanel = ({
           ) : (
           <section className={styles.detailBlock}>
             <h3 className={styles.block}>标准答要点</h3>
-            <ol className={styles.points}>
-              {card.keyPoints.map((point) => (
-                <li key={point}>{point}</li>
-              ))}
-            </ol>
+            {briefGenerating ? (
+              <p className={styles.brief} data-testid="brief-generating">
+                题干已就绪，正在后台补充参考要点…
+              </p>
+            ) : briefFailed ? (
+              <p className={styles.error} data-testid="brief-failed">
+                参考要点生成失败，可点击“刷新本题”重试{evaluationError ? `：${evaluationError}` : ''}
+              </p>
+            ) : (
+              <ol className={styles.points}>
+                {card.keyPoints.map((point) => (
+                  <li key={point}>{point}</li>
+                ))}
+              </ol>
+            )}
           </section>
           )}
           <div key={card.id} className={styles.folds}>

@@ -216,9 +216,12 @@ describe('watchCoachTurnSession scoring', () => {
     );
     expect(failed.ok).toBe(false);
     const cards = examSessions.load('session-exam')?.deck.cards;
-    expect(cards).toHaveLength(1);
+    expect(cards).toHaveLength(2);
     expect(cards?.[0]?.status).toBe('scored');
     expect(cards?.[0]?.scores[0]?.score).toBe(3.5);
+    expect(cards?.[1]?.id).toBe('Q2');
+    expect(cards?.[1]?.evaluation?.stage).toBe('failed');
+    expect(cards?.[1]?.questionText).toBe('二级索引如何回表？');
   });
 
   it('scores an answer that arrives while waiting for the next question', async () => {
@@ -462,7 +465,7 @@ describe('watchCoachTurnSession scoring', () => {
     );
     expect(next.ok).toBe(true);
     if (next.ok && next.status === 'updated') {
-      expect(next.deck.cards.map((card) => card.id)).toEqual(['Q1', 'Q1.1']);
+      expect(next.deck.cards.map((card) => card.id)).toEqual(['Q1', 'Q2']);
       expect(next.deck.cards[0]?.guideCount).toBe(2);
       expect(next.deck.cards[0]?.answerTurns).toEqual(['不会。', '还是不会。']);
       expect(next.deck.cards[1]?.status).toBe('pending');
