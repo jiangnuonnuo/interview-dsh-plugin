@@ -24,13 +24,13 @@
 把插件装进 Desktop 正在使用的 profile（一般是 `web`）。下面这条钉死当前可安装 commit：
 
 ```bash
-npx dshpub add jiangnuonnuo/interview-dsh-plugin --ref 095cd540953d405a9140751e4ceeb1e168160208 --profile web
+npx dshpub add jiangnuonnuo/interview-dsh-plugin --ref 289bbc021ef389998d228d74d3571c9c561e0ecb --profile web
 ```
 
 等价：
 
 ```bash
-dsh plugin --profile web add github:jiangnuonnuo/interview-dsh-plugin#095cd540953d405a9140751e4ceeb1e168160208
+dsh plugin --profile web add github:jiangnuonnuo/interview-dsh-plugin#289bbc021ef389998d228d74d3571c9c561e0ecb
 ```
 
 安装后**完全退出并重启 DSH Desktop**。输入栏右侧「AI 优化」旁出现「面试」才算装上。不要 `git clone` 再本地 `npm run build` 来当普通安装步骤。
